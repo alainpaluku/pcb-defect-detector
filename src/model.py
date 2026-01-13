@@ -1,5 +1,6 @@
 """Model architecture for PCB Defect Detection using MobileNetV2."""
 
+import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers, models, regularizers
 from tensorflow.keras.applications import MobileNetV2
@@ -238,7 +239,3 @@ class PCBClassifier:
         instance.model = model
         
         return instance
-
-
-# Import numpy for predict_single
-import numpy as np
