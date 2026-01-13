@@ -393,10 +393,13 @@ class TrainingManager:
         self.model.model.save(h5_path)
         print(f"   ✅ H5 format: {h5_path}")
         
-        # SavedModel format (for TF Serving)
+        # SavedModel format (for TF Serving) - use export() for Keras 3
         savedmodel_path = self.output_path / 'saved_model'
-        self.model.model.save(savedmodel_path)
-        print(f"   ✅ SavedModel: {savedmodel_path}")
+        try:
+            self.model.model.export(savedmodel_path)
+            print(f"   ✅ SavedModel: {savedmodel_path}")
+        except Exception as e:
+            print(f"   ⚠️ SavedModel export skipped: {e}")
         
         # Model size
         model_size = keras_path.stat().st_size / (1024 * 1024)

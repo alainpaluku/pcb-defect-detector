@@ -22,32 +22,32 @@ class Config:
     # Model
     IMG_SIZE = (224, 224)
     BATCH_SIZE = 32
-    EPOCHS = 50
+    EPOCHS = 30  # Réduit pour éviter overfitting
     LEARNING_RATE = 0.0001  # Lower LR for transfer learning
     VALIDATION_SPLIT = 0.2
     TEST_SPLIT = 0.1  # Hold-out test set
     RANDOM_SEED = 42
     
-    # Augmentation - Optimisé pour PCB (images industrielles)
-    ROTATION_RANGE = 15  # PCB ont des orientations limitées
-    WIDTH_SHIFT_RANGE = 0.1
-    HEIGHT_SHIFT_RANGE = 0.1
-    ZOOM_RANGE = 0.1
+    # Augmentation - Plus agressif pour réduire overfitting
+    ROTATION_RANGE = 30  # Augmenté
+    WIDTH_SHIFT_RANGE = 0.2  # Augmenté
+    HEIGHT_SHIFT_RANGE = 0.2  # Augmenté
+    ZOOM_RANGE = 0.2  # Augmenté
     HORIZONTAL_FLIP = True
     VERTICAL_FLIP = True
-    BRIGHTNESS_RANGE = (0.9, 1.1)  # Léger pour images industrielles
-    SHEAR_RANGE = 0.05
+    BRIGHTNESS_RANGE = (0.8, 1.2)  # Plus de variation
+    SHEAR_RANGE = 0.1  # Augmenté
     FILL_MODE = 'reflect'  # Meilleur pour PCB que 'nearest'
     
-    # Training callbacks
-    EARLY_STOPPING_PATIENCE = 15
-    REDUCE_LR_PATIENCE = 5
+    # Training callbacks - Early stopping plus agressif
+    EARLY_STOPPING_PATIENCE = 8  # Réduit pour arrêter plus tôt
+    REDUCE_LR_PATIENCE = 3  # Réduit
     REDUCE_LR_FACTOR = 0.5
     MIN_LEARNING_RATE = 1e-7
     
-    # Fine-tuning
-    FINE_TUNE_EPOCHS = 20
-    FINE_TUNE_LAYERS = 50  # Dernières couches à débloquer
+    # Fine-tuning - Moins de layers pour éviter overfitting
+    FINE_TUNE_EPOCHS = 15  # Réduit
+    FINE_TUNE_LAYERS = 30  # Réduit - moins de couches débloquées
     FINE_TUNE_LR = 1e-5
     
     @staticmethod

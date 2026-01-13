@@ -58,9 +58,9 @@ class PCBClassifier:
         # Batch normalization
         x = layers.BatchNormalization(name='bn_head')(x)
         
-        # Dense layers with regularization
+        # Dense layers with stronger regularization to reduce overfitting
         x = layers.Dense(
-            256, 
+            128,  # Réduit de 256 à 128
             activation='relu',
             kernel_regularizer=regularizers.l2(l2_reg),
             name='dense_1'
@@ -68,12 +68,12 @@ class PCBClassifier:
         x = layers.Dropout(dropout_rate, name='dropout_1')(x)
         
         x = layers.Dense(
-            128, 
+            64,  # Réduit de 128 à 64
             activation='relu',
             kernel_regularizer=regularizers.l2(l2_reg),
             name='dense_2'
         )(x)
-        x = layers.Dropout(dropout_rate * 0.6, name='dropout_2')(x)
+        x = layers.Dropout(dropout_rate * 0.8, name='dropout_2')(x)  # Plus de dropout
         
         # Output layer
         outputs = layers.Dense(
