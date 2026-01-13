@@ -5,8 +5,13 @@ data/
 # Model outputs
 checkpoints/
 results/
+output/
 *.keras
 *.h5
+*.tflite
+*.pb
+saved_model/
+logs/
 
 # Python
 __pycache__/
@@ -15,6 +20,11 @@ __pycache__/
 .eggs/
 dist/
 build/
+*.egg
+.Python
+venv/
+env/
+ENV/
 
 # Logs
 *.log
@@ -31,3 +41,18 @@ pipeline.log
 # OS
 .DS_Store
 Thumbs.db
+
+# Kaggle credentials
+.kaggle/
+kaggle.json
+
+# Images (except documentation)
+*.png
+*.jpg
+*.jpeg
+!notebooks/*.png
+!docs/*.png
+
+# Environment
+.env
+.venv
