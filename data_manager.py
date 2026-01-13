@@ -1,8 +1,7 @@
 """
 Kaggle Data Manager module for PCB Defect Detector.
 
-This module handles authentication with Kaggle API, dataset downloading,
-and directory structure parsing for the PCB defects dataset.
+Handles authentication, dataset downloading, and directory parsing.
 """
 
 import os
@@ -13,238 +12,194 @@ from pathlib import Path
 from typing import Dict, List, Optional
 from getpass import getpass
 
-from config import DataConfig
+from config import DataConfig, Environment, detect_environment
 
 
 class KaggleDataManager:
-    """Manages Kaggle authentication and dataset operations.
+    """Manages Kaggle authentication and dataset operations."""
     
-    This class handles secure authentication with Kaggle API using
-    environment variables, downloads datasets, and parses the resulting
-    directory structure for training data preparation.
-    
-    Attributes:
-        config: Data configuration object.
-        logger: Logger instance for this class.
-        dataset_path: Path to the extracted dataset.
-        class_names: List of detected class names from dataset.
-    
-    Example:
-        >>> config = DataConfig()
-        >>> manager = KaggleDataManager(config)
-        >>> manager.authenticate()
-        >>> manager.download_dataset()
-        >>> structure = manager.parse_directory_structure()
-    """
+    VALID_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
     
     def __init__(self, config: DataConfig) -> None:
-        """Initialize KaggleDataManager with configuration.
-        
-        Args:
-            config: DataConfig object containing dataset parameters.
-        """
         self.config = config
         self.logger = logging.getLogger(self.__class__.__name__)
         self.dataset_path: Optional[Path] = None
         self.class_names: List[str] = []
+        self.environment = detect_environment()
         
     def authenticate(self, api_token: Optional[str] = None) -> None:
-        """Authenticate with Kaggle API using environment variable or user input.
+        """Authenticate with Kaggle API."""
+        # Skip auth on Kaggle (already authenticated)
+        if self.environment == Environment.KAGGLE:
+            self.logger.info("Running on Kaggle - authentication not required.")
+            return
         
-        This method sets up Kaggle credentials either from an environment
-        variable, a provided token, or by prompting the user securely.
-        
-        Args:
-            api_token: Optional JSON string containing Kaggle credentials.
-                      If not provided, will check environment variable or
-                      prompt user for input.
-        
-        Raises:
-            ValueError: If authentication credentials are invalid.
-            PermissionError: If unable to create Kaggle config directory.
-        """
         kaggle_dir = Path.home() / ".kaggle"
         kaggle_json = kaggle_dir / "kaggle.json"
         
-        # Check if already authenticated
         if kaggle_json.exists():
-            self.logger.info("Kaggle credentials already configured.")
+            self.logger.info("Kaggle credentials found.")
             return
             
-        # Try to get token from various sources
         token = api_token or os.environ.get('KAGGLE_API_TOKEN')
         
         if not token:
-            self.logger.info("No Kaggle API token found. Please enter your credentials.")
-            print("\nEnter your Kaggle API token (JSON format):")
-            print('Example: {"username":"your_username","key":"your_api_key"}')
+            self.logger.info("Enter Kaggle API token (JSON format):")
             token = getpass("Token: ")
         
-        # Validate token format
         try:
             credentials = json.loads(token)
             if 'username' not in credentials or 'key' not in credentials:
-                raise ValueError("Token must contain 'username' and 'key' fields.")
+                raise ValueError("Token must contain 'username' and 'key'.")
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON format for Kaggle token: {e}")
+            raise ValueError(f"Invalid JSON: {e}")
         
-        # Create kaggle directory and save credentials
-        try:
-            kaggle_dir.mkdir(parents=True, exist_ok=True)
-            kaggle_json.write_text(token)
-            kaggle_json.chmod(0o600)  # Secure file permissions
-            self.logger.info("Kaggle credentials saved successfully.")
-        except OSError as e:
-            raise PermissionError(f"Failed to save Kaggle credentials: {e}")
+        kaggle_dir.mkdir(parents=True, exist_ok=True)
+        kaggle_json.write_text(token)
+        kaggle_json.chmod(0o600)
         
-        # Set environment variables for current session
         os.environ['KAGGLE_USERNAME'] = credentials['username']
         os.environ['KAGGLE_KEY'] = credentials['key']
+        self.logger.info("Kaggle credentials saved.")
 
     def download_dataset(self, force: bool = False) -> Path:
-        """Download and extract the PCB defects dataset from Kaggle.
-        
-        Downloads the dataset if not already present, or if force=True.
-        Automatically extracts the zip file after download.
-        
-        Args:
-            force: If True, re-download even if dataset exists.
-        
-        Returns:
-            Path to the extracted dataset directory.
-        
-        Raises:
-            RuntimeError: If download or extraction fails.
-        """
-        from kaggle.api.kaggle_api_extended import KaggleApi
+        """Download and extract dataset from Kaggle."""
+        # On Kaggle, dataset is pre-mounted
+        if self.environment == Environment.KAGGLE:
+            self.dataset_path = self._find_kaggle_dataset()
+            self.logger.info(f"Using Kaggle dataset at {self.dataset_path}")
+            return self.dataset_path
         
         self.config.data_dir.mkdir(parents=True, exist_ok=True)
         
-        # Check if dataset already exists
-        expected_path = self.config.data_dir / "PCB_DATASET"
-        if expected_path.exists() and not force:
-            self.logger.info(f"Dataset already exists at {expected_path}")
-            self.dataset_path = expected_path
+        # Check if already exists
+        existing = self._find_dataset_root()
+        if existing and not force:
+            self.dataset_path = existing
+            self.logger.info(f"Dataset exists at {self.dataset_path}")
             return self.dataset_path
         
-        self.logger.info(f"Downloading dataset: {self.config.dataset_name}")
+        self.logger.info(f"Downloading {self.config.dataset_name}...")
         
-        try:
-            api = KaggleApi()
-            api.authenticate()
-            
-            # Download dataset
-            api.dataset_download_files(
-                self.config.dataset_name,
-                path=str(self.config.data_dir),
-                unzip=False
-            )
-            
-            # Find and extract zip file
-            zip_files = list(self.config.data_dir.glob("*.zip"))
-            if not zip_files:
-                raise RuntimeError("No zip file found after download.")
-            
-            zip_path = zip_files[0]
-            self.logger.info(f"Extracting {zip_path}...")
-            
-            with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                zip_ref.extractall(self.config.data_dir)
-            
-            # Clean up zip file
-            zip_path.unlink()
-            self.logger.info("Dataset extracted successfully.")
-            
-            # Find the actual dataset directory
-            self.dataset_path = self._find_dataset_root()
-            return self.dataset_path
-            
-        except Exception as e:
-            raise RuntimeError(f"Failed to download/extract dataset: {e}")
+        from kaggle.api.kaggle_api_extended import KaggleApi
+        
+        api = KaggleApi()
+        api.authenticate()
+        api.dataset_download_files(
+            self.config.dataset_name,
+            path=str(self.config.data_dir),
+            unzip=False
+        )
+        
+        # Extract zip
+        zip_files = list(self.config.data_dir.glob("*.zip"))
+        if not zip_files:
+            raise RuntimeError("No zip file found after download.")
+        
+        zip_path = zip_files[0]
+        self.logger.info(f"Extracting {zip_path}...")
+        
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            zf.extractall(self.config.data_dir)
+        
+        zip_path.unlink()
+        
+        self.dataset_path = self._find_dataset_root()
+        if not self.dataset_path:
+            raise RuntimeError("Could not find dataset after extraction.")
+        
+        self.logger.info(f"Dataset ready at {self.dataset_path}")
+        return self.dataset_path
     
-    def _find_dataset_root(self) -> Path:
-        """Find the root directory of the extracted dataset.
+    def _find_kaggle_dataset(self) -> Path:
+        """Find dataset in Kaggle input directory."""
+        kaggle_input = Path("/kaggle/input/pcb-defects")
         
-        Returns:
-            Path to the dataset root directory.
-        
-        Raises:
-            FileNotFoundError: If dataset directory cannot be found.
-        """
-        # Common patterns for PCB dataset structure
-        possible_paths = [
-            self.config.data_dir / "PCB_DATASET",
-            self.config.data_dir / "pcb_defects",
-            self.config.data_dir / "images",
+        # Check common structures
+        candidates = [
+            kaggle_input / "PCB_DATASET",
+            kaggle_input / "pcb_defects", 
+            kaggle_input
         ]
         
-        for path in possible_paths:
-            if path.exists() and path.is_dir():
+        for path in candidates:
+            if path.exists() and self._has_image_subdirs(path):
                 return path
         
-        # Search for directory with image subdirectories
-        for item in self.config.data_dir.iterdir():
-            if item.is_dir():
-                subdirs = list(item.iterdir())
-                if subdirs and all(d.is_dir() for d in subdirs[:5]):
-                    return item
+        # Search subdirectories
+        for item in kaggle_input.iterdir():
+            if item.is_dir() and self._has_image_subdirs(item):
+                return item
         
-        raise FileNotFoundError(
-            f"Could not find dataset root in {self.config.data_dir}"
-        )
+        raise FileNotFoundError(f"Dataset not found in {kaggle_input}")
+    
+    def _find_dataset_root(self) -> Optional[Path]:
+        """Find dataset root directory."""
+        if not self.config.data_dir.exists():
+            return None
+        
+        candidates = [
+            self.config.data_dir / "PCB_DATASET",
+            self.config.data_dir / "pcb_defects",
+            self.config.data_dir
+        ]
+        
+        for path in candidates:
+            if path.exists() and self._has_image_subdirs(path):
+                return path
+        
+        for item in self.config.data_dir.iterdir():
+            if item.is_dir() and self._has_image_subdirs(item):
+                return item
+        
+        return None
+    
+    def _has_image_subdirs(self, path: Path) -> bool:
+        """Check if path contains subdirectories with images."""
+        subdirs = [d for d in path.iterdir() if d.is_dir()]
+        if not subdirs:
+            return False
+        
+        for subdir in subdirs[:3]:
+            images = [f for f in subdir.iterdir() 
+                     if f.suffix.lower() in self.VALID_EXTENSIONS]
+            if images:
+                return True
+        return False
     
     def parse_directory_structure(self) -> Dict[str, List[Path]]:
-        """Parse the dataset directory structure to identify classes and images.
-        
-        Scans the dataset directory to identify class folders and their
-        associated image files. Supports common image formats.
-        
-        Returns:
-            Dictionary mapping class names to lists of image paths.
-        
-        Raises:
-            ValueError: If no valid image classes are found.
-        """
+        """Parse dataset directory to identify classes and images."""
         if self.dataset_path is None:
-            raise ValueError("Dataset not downloaded. Call download_dataset() first.")
+            raise ValueError("Dataset not loaded. Call download_dataset() first.")
         
-        valid_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
         class_images: Dict[str, List[Path]] = {}
         
-        self.logger.info(f"Parsing directory structure at {self.dataset_path}")
+        self.logger.info(f"Parsing {self.dataset_path}")
         
         for class_dir in sorted(self.dataset_path.iterdir()):
             if not class_dir.is_dir():
                 continue
             
-            class_name = class_dir.name
             images = [
                 img for img in class_dir.iterdir()
-                if img.suffix.lower() in valid_extensions
+                if img.suffix.lower() in self.VALID_EXTENSIONS
             ]
             
             if images:
-                class_images[class_name] = images
-                self.logger.info(f"  Class '{class_name}': {len(images)} images")
+                class_images[class_dir.name] = images
+                self.logger.info(f"  {class_dir.name}: {len(images)} images")
         
         if not class_images:
-            raise ValueError(f"No valid image classes found in {self.dataset_path}")
+            raise ValueError(f"No image classes found in {self.dataset_path}")
         
         self.class_names = sorted(class_images.keys())
-        self.logger.info(f"Found {len(self.class_names)} classes with "
-                        f"{sum(len(v) for v in class_images.values())} total images")
+        total = sum(len(v) for v in class_images.values())
+        self.logger.info(f"Total: {len(self.class_names)} classes, {total} images")
         
         return class_images
     
     def get_class_names(self) -> List[str]:
-        """Get the list of class names in the dataset.
-        
-        Returns:
-            Sorted list of class names.
-        
-        Raises:
-            ValueError: If directory structure hasn't been parsed yet.
-        """
+        """Get list of class names."""
         if not self.class_names:
-            raise ValueError("Directory not parsed. Call parse_directory_structure() first.")
+            raise ValueError("Call parse_directory_structure() first.")
         return self.class_names
