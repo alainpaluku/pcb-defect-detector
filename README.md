@@ -19,10 +19,6 @@
 
 Système de détection automatique de défauts sur circuits imprimés (PCB) utilisant le transfer learning avec **MobileNetV2**. Conçu pour l'inspection qualité en environnement industriel.
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/alainpaluku/pcb-defect-detector/main/assets/demo.png" alt="Demo" width="600"/>
-</p>
-
 ## 🏷️ Classes de Défauts
 
 | Défaut | Description |
@@ -51,24 +47,50 @@ Système de détection automatique de défauts sur circuits imprimés (PCB) util
 ### Option 2 : Local
 
 ```bash
-# Cloner
 git clone https://github.com/alainpaluku/pcb-defect-detector.git
 cd pcb-defect-detector
-
-# Installer
 pip install -r requirements.txt
-
-# Entraîner
 python main.py --epochs 30 --fine-tune
 ```
 
-## 🏗️ Architecture
+## 🏗️ Architecture CNN
+
+### Réseau de Neurones Convolutif
+
+Ce projet utilise **MobileNetV2**, un CNN (Convolutional Neural Network) optimisé pour la vision par ordinateur.
+
+**Pourquoi MobileNetV2 ?**
+- 🧠 Pré-entraîné sur **ImageNet** (1.4M images, 1000 classes)
+- ⚡ Léger : ~3.4M paramètres → rapide sur GPU/mobile
+- 🎯 **Depthwise Separable Convolutions** : 8-9x moins de calculs qu'une convolution classique
+- 🔗 **Inverted Residuals** : Skip connections pour un meilleur gradient
+
+**Fonctionnement des convolutions :**
+```
+Image (224×224×3)
+    ↓
+┌─────────────────────────────────────┐
+│  CONVOLUTIONS (53 couches)          │
+│  • Détection de bords               │
+│  • Extraction de textures           │
+│  • Reconnaissance de formes         │
+│  • Features de haut niveau          │
+└─────────────────────────────────────┘
+    ↓
+Features Map (7×7×1280)
+    ↓
+Classification (6 défauts)
+```
+
+**Architecture complète :**
 
 ```
 ┌─────────────────────────────────────────┐
 │           Input (224×224×3)             │
 ├─────────────────────────────────────────┤
 │     MobileNetV2 (ImageNet weights)      │
+│  [Conv2D → BatchNorm → ReLU6] × 53      │
+│     Depthwise Separable Convolutions    │
 │         [Fine-tuned: 30 layers]         │
 ├─────────────────────────────────────────┤
 │       GlobalAveragePooling2D            │
@@ -83,21 +105,12 @@ python main.py --epochs 30 --fine-tune
 
 ## 📊 Pipeline d'Entraînement
 
-```mermaid
-graph LR
-    A[📁 Data] --> B[🔄 Augmentation]
-    B --> C[🧊 Phase 1: Transfer Learning]
-    C --> D[🔓 Phase 2: Fine-tuning]
-    D --> E[📈 Évaluation]
-    E --> F[💾 Export]
-```
-
 | Phase | Epochs | Learning Rate | Description |
 |-------|--------|---------------|-------------|
 | Transfer Learning | 30 | 1e-4 | Base MobileNetV2 gelée |
 | Fine-tuning | 15 | 1e-5 | 30 dernières couches dégelées |
 
-## 📈 Résultats
+## � Résultats
 
 | Métrique | Valeur |
 |----------|--------|
@@ -107,6 +120,115 @@ graph LR
 | **F1 Score** | ~85% |
 | **Temps d'inférence** | ~30ms |
 | **Taille du modèle** | ~14MB |
+
+
+## 🔮 Utilisation du Modèle
+
+### Charger et prédire
+
+```python
+import tensorflow as tf
+import numpy as np
+
+# Charger le modèle entraîné
+model = tf.keras.models.load_model('pcb_model.keras')
+
+# Classes de défauts
+CLASSES = ['missing_hole', 'mouse_bite', 'open_circuit', 'short', 'spur', 'spurious_copper']
+
+# Charger une image PCB
+img = tf.keras.preprocessing.image.load_img('pcb_image.jpg', target_size=(224, 224))
+img_array = tf.keras.preprocessing.image.img_to_array(img)
+img_array = np.expand_dims(img_array / 255.0, axis=0)  # Normaliser
+
+# Prédiction
+prediction = model.predict(img_array)
+predicted_class = CLASSES[np.argmax(prediction)]
+confidence = np.max(prediction) * 100
+
+print(f"Défaut détecté: {predicted_class}")
+print(f"Confiance: {confidence:.1f}%")
+```
+
+### Prédiction sur plusieurs images
+
+```python
+from pathlib import Path
+
+def predict_batch(image_folder, model):
+    """Prédire sur un dossier d'images."""
+    CLASSES = ['missing_hole', 'mouse_bite', 'open_circuit', 'short', 'spur', 'spurious_copper']
+    results = []
+    
+    for img_path in Path(image_folder).glob('*.jpg'):
+        img = tf.keras.preprocessing.image.load_img(img_path, target_size=(224, 224))
+        img_array = np.expand_dims(tf.keras.preprocessing.image.img_to_array(img) / 255.0, 0)
+        
+        pred = model.predict(img_array, verbose=0)
+        results.append({
+            'image': img_path.name,
+            'defect': CLASSES[np.argmax(pred)],
+            'confidence': f"{np.max(pred)*100:.1f}%"
+        })
+    
+    return results
+
+# Utilisation
+model = tf.keras.models.load_model('pcb_model.keras')
+results = predict_batch('mes_images_pcb/', model)
+for r in results:
+    print(f"{r['image']}: {r['defect']} ({r['confidence']})")
+```
+
+### Classe d'inspection pour production
+
+```python
+class PCBInspector:
+    """Classe pour l'inspection de PCB en production."""
+    
+    def __init__(self, model_path='pcb_model.keras'):
+        self.model = tf.keras.models.load_model(model_path)
+        self.classes = ['missing_hole', 'mouse_bite', 'open_circuit', 
+                        'short', 'spur', 'spurious_copper']
+    
+    def inspect(self, image_path):
+        """Inspecte une image et retourne le résultat."""
+        img = tf.keras.preprocessing.image.load_img(image_path, target_size=(224, 224))
+        img_array = np.expand_dims(tf.keras.preprocessing.image.img_to_array(img) / 255.0, 0)
+        
+        prediction = self.model.predict(img_array, verbose=0)[0]
+        
+        return {
+            'status': 'DEFECT' if np.max(prediction) > 0.5 else 'UNCERTAIN',
+            'defect_type': self.classes[np.argmax(prediction)],
+            'confidence': float(np.max(prediction)),
+            'all_scores': {c: float(p) for c, p in zip(self.classes, prediction)}
+        }
+
+# Utilisation
+inspector = PCBInspector('pcb_model.keras')
+result = inspector.inspect('circuit_board.jpg')
+print(f"Status: {result['status']}")
+print(f"Défaut: {result['defect_type']} ({result['confidence']:.1%})")
+```
+
+### Conversion TFLite pour mobile/edge
+
+```python
+# Convertir en TFLite pour déploiement embarqué
+model = tf.keras.models.load_model('pcb_model.keras')
+
+converter = tf.lite.TFLiteConverter.from_keras_model(model)
+converter.optimizations = [tf.lite.Optimize.DEFAULT]
+converter.target_spec.supported_types = [tf.float16]
+
+tflite_model = converter.convert()
+
+with open('pcb_model.tflite', 'wb') as f:
+    f.write(tflite_model)
+
+print(f"Modèle TFLite: {len(tflite_model) / 1024 / 1024:.1f} MB")
+```
 
 ## 📁 Structure du Projet
 
@@ -128,8 +250,6 @@ pcb-defect-detector/
 
 ## 💾 Fichiers Générés
 
-Après entraînement dans `/kaggle/working/` ou `output/` :
-
 | Fichier | Usage |
 |---------|-------|
 | `pcb_model.keras` | Modèle Keras (recommandé) |
@@ -143,39 +263,14 @@ Après entraînement dans `/kaggle/working/` ou `output/` :
 Paramètres clés dans `src/config.py` :
 
 ```python
-# Modèle
 IMG_SIZE = (224, 224)
 BATCH_SIZE = 32
 EPOCHS = 30
 LEARNING_RATE = 0.0001
-
-# Augmentation (anti-overfitting)
 ROTATION_RANGE = 30
-ZOOM_RANGE = 0.2
 DROPOUT = 0.5
-
-# Fine-tuning
 FINE_TUNE_EPOCHS = 15
 FINE_TUNE_LAYERS = 30
-FINE_TUNE_LR = 1e-5
-```
-
-## � Utilisation du Modèle
-
-```python
-import tensorflow as tf
-import numpy as np
-
-# Charger
-model = tf.keras.models.load_model('pcb_model.keras')
-
-# Prédire
-img = tf.keras.preprocessing.image.load_img('pcb_image.jpg', target_size=(224, 224))
-img_array = np.expand_dims(tf.keras.preprocessing.image.img_to_array(img) / 255.0, 0)
-
-prediction = model.predict(img_array)
-classes = ['missing_hole', 'mouse_bite', 'open_circuit', 'short', 'spur', 'spurious_copper']
-print(f"Défaut détecté: {classes[np.argmax(prediction)]}")
 ```
 
 ## 📚 Dataset
@@ -185,7 +280,6 @@ print(f"Défaut détecté: {classes[np.argmax(prediction)]}")
 - 🖼️ 1386 images (693 originales + 693 rotations)
 - 🏷️ 6 classes de défauts
 - 📐 ~115 images par classe
-- 🔍 3-5 défauts par image
 
 ## 👤 Auteur
 
@@ -198,5 +292,5 @@ MIT License - Voir [LICENSE](LICENSE)
 ---
 
 <p align="center">
-  <i>⭐ Star ce repo si tu le trouves utile !</i>
+  ⭐ Star ce repo si tu le trouves utile !
 </p>
