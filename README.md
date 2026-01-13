@@ -36,7 +36,7 @@ pcb-defect-detector/
 4. Run:
 
 ```python
-!git clone https://github.com/YOUR_USERNAME/pcb-defect-detector.git
+!git clone https://github.com/alainpaluku/pcb-defect-detector.git
 %cd pcb-defect-detector
 !python main.py
 ```
