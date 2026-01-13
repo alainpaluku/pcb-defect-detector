@@ -46,16 +46,40 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 # ============== DATA LOADING ==============
 def find_dataset() -> Path:
     """Find dataset root directory."""
-    candidates = [DATA_DIR / 'PCB_DATASET', DATA_DIR / 'pcb_defects', DATA_DIR]
+    # Check if DATA_DIR exists
+    if not DATA_DIR.exists():
+        raise FileNotFoundError(
+            f"\n{'='*60}\n"
+            f"ERROR: Dataset not found at {DATA_DIR}\n\n"
+            f"SOLUTION:\n"
+            f"1. Click 'Add Data' button in Kaggle notebook\n"
+            f"2. Search for 'pcb-defects' or 'akhatova/pcb-defects'\n"
+            f"3. Click 'Add' to attach the dataset\n"
+            f"4. Re-run this cell\n"
+            f"{'='*60}\n"
+        )
+    
+    # Try common dataset structures
+    candidates = [
+        DATA_DIR / 'PCB_DATASET',
+        DATA_DIR / 'pcb_defects',
+        DATA_DIR
+    ]
+    
     for path in candidates:
         if path.exists():
             subdirs = [d for d in path.iterdir() if d.is_dir()]
             if subdirs:
+                logger.info(f"Found dataset at: {path}")
                 return path
+    
+    # Search all subdirectories
     for item in DATA_DIR.iterdir():
         if item.is_dir():
+            logger.info(f"Found dataset at: {item}")
             return item
-    raise FileNotFoundError(f"Dataset not found in {DATA_DIR}")
+    
+    raise FileNotFoundError(f"Dataset structure not recognized in {DATA_DIR}")
 
 def parse_dataset(dataset_path: Path) -> Tuple[Dict[str, List[Path]], List[str]]:
     """Parse dataset directory structure."""

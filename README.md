@@ -39,20 +39,23 @@ pcb-defect-detector/
 
 ## Quick Start
 
-### Option 1: On Kaggle (Recommended)
+### On Kaggle (Recommended)
 
-1. Create a new Kaggle Notebook
-2. Add dataset: `akhatova/pcb-defects`
-3. Enable GPU (Settings → Accelerator → GPU T4 x2)
-4. Copy the entire content of `kaggle_script.py` into a cell and run
+**⚠️ IMPORTANT: Vous DEVEZ ajouter le dataset avant d'exécuter le code !**
 
-**Or use this one-liner:**
+1. Créer un nouveau Notebook Kaggle
+2. **Ajouter le dataset** : Cliquez sur "+ Add Data" → Cherchez `akhatova/pcb-defects` → Cliquez "Add"
+3. Activer le GPU : Settings → Accelerator → GPU T4 x2
+4. Exécuter le code :
+
 ```python
 !wget https://raw.githubusercontent.com/alainpaluku/pcb-defect-detector/main/kaggle_script.py
 %run kaggle_script.py
 ```
 
-### Option 2: Local Training
+📖 **Guide détaillé** : Voir [KAGGLE_GUIDE.md](KAGGLE_GUIDE.md) pour les instructions complètes.
+
+### Local Training
 
 ```bash
 # Clone repository
