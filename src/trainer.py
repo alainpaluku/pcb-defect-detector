@@ -1,407 +1,454 @@
-"""
-Training Manager Module for PCB Defect Detection.
-
-Orchestrates the complete training pipeline including callbacks,
-model checkpointing, and performance visualization.
-"""
+"""Training manager for PCB Defect Detection."""
 
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from pathlib import Path
 import tensorflow as tf
-from sklearn.metrics import classification_report, confusion_matrix
+from pathlib import Path
+from datetime import datetime
+from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc
+from sklearn.preprocessing import label_binarize
 from src.config import Config
 from src.data_ingestion import DataIngestion
 from src.model import PCBClassifier
 
 
 class TrainingManager:
-    """
-    Manages the complete training pipeline for PCB defect detection.
-    
-    Responsibilities:
-    - Data loading and preprocessing
-    - Model training with callbacks
-    - Performance evaluation
-    - Visualization and reporting
-    - Model saving for deployment
-    """
+    """Manages the complete training pipeline for PCB defect classification."""
     
     def __init__(self):
-        """Initialize training manager with configuration."""
-        self.config = Config()
         self.output_path = Config.get_output_path()
-        self.data_ingestion = None
-        self.model_wrapper = None
+        self.data = None
+        self.model = None
         self.history = None
+        self.metrics = {}
         
         # Set random seeds for reproducibility
         np.random.seed(Config.RANDOM_SEED)
         tf.random.set_seed(Config.RANDOM_SEED)
         
-        print("="*60)
-        print("PCB DEFECT DETECTION SYSTEM")
-        print("Automated Optical Inspection (AOI) for Electronics Manufacturing")
-        print("="*60)
-        print(f"Environment: {'Kaggle' if Config.is_kaggle_environment() else 'Local'}")
-        print(f"Output Path: {self.output_path}")
-        print("="*60 + "\n")
+        self._print_header()
+    
+    def _print_header(self):
+        """Print system information header."""
+        device_info = Config.get_device_info()
+        
+        print("\n" + "=" * 60)
+        print("🔬 PCB DEFECT DETECTION SYSTEM")
+        print("=" * 60)
+        print(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"🖥️  Environment: {device_info['environment']}")
+        print(f"📦 TensorFlow: {device_info['tensorflow_version']}")
+        print(f"🎮 GPU: {'✅ ' + str(device_info['gpu_devices']) if device_info['gpu_available'] else '❌ Not available'}")
+        print(f"📁 Output: {self.output_path}")
+        print("=" * 60 + "\n")
     
     def setup_data(self):
-        """
-        Set up data ingestion pipeline.
+        """Set up data pipeline."""
+        print("📊 Setting up data pipeline...")
         
-        Returns:
-            DataIngestion: Configured data ingestion object
-        """
-        print("PHASE 1: DATA INGESTION")
-        print("-" * 60)
+        self.data = DataIngestion()
+        self.data.analyze_dataset()
+        self.data.compute_class_weights()
+        self.data.create_generators()
         
-        self.data_ingestion = DataIngestion()
-        
-        # Analyze dataset
-        stats = self.data_ingestion.analyze_dataset()
-        
-        # Compute class weights for imbalanced data
-        self.data_ingestion.compute_class_weights()
-        
-        # Create data generators
-        self.data_ingestion.create_data_generators()
-        
-        return self.data_ingestion
+        return self.data
     
     def setup_model(self):
-        """
-        Set up and compile the model.
+        """Build and compile model."""
+        print("🏗️  Building model...")
         
-        Returns:
-            PCBClassifier: Configured model wrapper
-        """
-        print("\nPHASE 2: MODEL ARCHITECTURE")
-        print("-" * 60)
-        
-        self.model_wrapper = PCBClassifier(
-            num_classes=self.data_ingestion.num_classes,
-            img_size=Config.IMG_SIZE
+        self.model = PCBClassifier(num_classes=self.data.num_classes)
+        self.model.build_model(
+            dropout_rate=0.5,
+            l2_reg=0.01
         )
+        self.model.compile_model(learning_rate=Config.LEARNING_RATE)
+        self.model.get_model_summary()
         
-        # Build model
-        self.model_wrapper.build_model(trainable_base_layers=0)
-        
-        # Compile model
-        self.model_wrapper.compile_model(learning_rate=Config.LEARNING_RATE)
-        
-        # Print summary
-        self.model_wrapper.get_model_summary()
-        
-        return self.model_wrapper
+        return self.model
     
-    def get_callbacks(self):
-        """
-        Create training callbacks for optimization and monitoring.
+    def get_callbacks(self, phase='training'):
+        """Create training callbacks.
         
-        Returns:
-            list: List of Keras callbacks
+        Args:
+            phase: 'training' or 'fine_tuning'
         """
         callbacks = []
         
-        # Model checkpoint - save best model
-        checkpoint_path = self.output_path / "best_model.h5"
-        checkpoint = tf.keras.callbacks.ModelCheckpoint(
-            filepath=str(checkpoint_path),
-            monitor='val_accuracy',
-            save_best_only=True,
-            mode='max',
-            verbose=1
-        )
-        callbacks.append(checkpoint)
-        
-        # Early stopping - prevent overfitting
-        early_stopping = tf.keras.callbacks.EarlyStopping(
-            monitor='val_loss',
-            patience=Config.EARLY_STOPPING_PATIENCE,
-            restore_best_weights=True,
-            verbose=1
-        )
-        callbacks.append(early_stopping)
-        
-        # Reduce learning rate on plateau
-        reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(
-            monitor='val_loss',
-            factor=Config.REDUCE_LR_FACTOR,
-            patience=Config.REDUCE_LR_PATIENCE,
-            min_lr=Config.MIN_LEARNING_RATE,
-            verbose=1
-        )
-        callbacks.append(reduce_lr)
-        
-        # TensorBoard logging (if not in Kaggle)
-        if not Config.is_kaggle_environment():
-            tensorboard = tf.keras.callbacks.TensorBoard(
-                log_dir=str(self.output_path / "logs"),
-                histogram_freq=1
+        # Model checkpoint
+        checkpoint_path = self.output_path / f"best_model_{phase}.keras"
+        callbacks.append(
+            tf.keras.callbacks.ModelCheckpoint(
+                str(checkpoint_path),
+                monitor='val_accuracy',
+                save_best_only=True,
+                mode='max',
+                verbose=1
             )
-            callbacks.append(tensorboard)
+        )
+        
+        # Early stopping
+        callbacks.append(
+            tf.keras.callbacks.EarlyStopping(
+                monitor='val_loss',
+                patience=Config.EARLY_STOPPING_PATIENCE,
+                restore_best_weights=True,
+                verbose=1
+            )
+        )
+        
+        # Learning rate reduction
+        callbacks.append(
+            tf.keras.callbacks.ReduceLROnPlateau(
+                monitor='val_loss',
+                factor=Config.REDUCE_LR_FACTOR,
+                patience=Config.REDUCE_LR_PATIENCE,
+                min_lr=Config.MIN_LEARNING_RATE,
+                verbose=1
+            )
+        )
+        
+        # TensorBoard (for Kaggle)
+        if Config.is_kaggle():
+            log_dir = self.output_path / "logs" / phase
+            callbacks.append(
+                tf.keras.callbacks.TensorBoard(
+                    log_dir=str(log_dir),
+                    histogram_freq=1,
+                    write_graph=True
+                )
+            )
         
         return callbacks
     
-    def train_model(self):
+    def train(self, epochs=None):
+        """Train the model (transfer learning phase).
+        
+        Args:
+            epochs: Number of epochs (default: Config.EPOCHS)
         """
-        Train the model with configured callbacks.
+        epochs = epochs or Config.EPOCHS
         
-        Returns:
-            tf.keras.callbacks.History: Training history
-        """
-        print("\nPHASE 3: MODEL TRAINING")
-        print("-" * 60)
+        print("\n" + "=" * 60)
+        print("🚀 PHASE 1: TRANSFER LEARNING")
+        print("=" * 60)
         
-        train_steps, val_steps = self.data_ingestion.get_steps_per_epoch()
+        train_steps, val_steps = self.data.get_steps()
+        print(f"📈 Steps per epoch - Train: {train_steps}, Val: {val_steps}")
+        print(f"🔄 Epochs: {epochs}")
+        print()
         
-        self.history = self.model_wrapper.model.fit(
-            self.data_ingestion.train_generator,
+        self.history = self.model.model.fit(
+            self.data.train_generator,
             steps_per_epoch=train_steps,
-            validation_data=self.data_ingestion.val_generator,
+            validation_data=self.data.val_generator,
             validation_steps=val_steps,
-            epochs=Config.EPOCHS,
-            callbacks=self.get_callbacks(),
-            class_weight=self.data_ingestion.class_weights,
+            epochs=epochs,
+            callbacks=self.get_callbacks('training'),
+            class_weight=self.data.class_weights,
             verbose=1
         )
         
-        print("\n✓ Training completed successfully")
         return self.history
     
-    def evaluate_model(self):
-        """
-        Evaluate model performance on validation set.
+    def fine_tune(self, epochs=None, layers=None):
+        """Fine-tune the model with unfrozen base layers.
         
-        Returns:
-            dict: Evaluation metrics
+        Args:
+            epochs: Number of fine-tuning epochs
+            layers: Number of layers to unfreeze
         """
-        print("\nPHASE 4: MODEL EVALUATION")
-        print("-" * 60)
+        epochs = epochs or Config.FINE_TUNE_EPOCHS
+        layers = layers or Config.FINE_TUNE_LAYERS
+        
+        print("\n" + "=" * 60)
+        print(f"🔧 PHASE 2: FINE-TUNING (unfreezing last {layers} layers)")
+        print("=" * 60)
+        
+        # Enable fine-tuning
+        self.model.enable_fine_tuning(
+            num_layers=layers,
+            learning_rate=Config.FINE_TUNE_LR
+        )
+        
+        train_steps, val_steps = self.data.get_steps()
+        
+        # Continue training
+        history_fine = self.model.model.fit(
+            self.data.train_generator,
+            steps_per_epoch=train_steps,
+            validation_data=self.data.val_generator,
+            validation_steps=val_steps,
+            epochs=epochs,
+            callbacks=self.get_callbacks('fine_tuning'),
+            class_weight=self.data.class_weights,
+            verbose=1
+        )
+        
+        # Merge histories
+        for key in self.history.history:
+            if key in history_fine.history:
+                self.history.history[key].extend(history_fine.history[key])
+        
+        return history_fine
+    
+    def evaluate(self):
+        """Evaluate model and return metrics."""
+        print("\n" + "=" * 60)
+        print("📊 EVALUATION")
+        print("=" * 60)
         
         # Evaluate on validation set
-        val_loss, val_acc, val_precision, val_recall, val_auc = \
-            self.model_wrapper.model.evaluate(
-                self.data_ingestion.val_generator,
-                verbose=1
-            )
+        results = self.model.model.evaluate(
+            self.data.val_generator,
+            verbose=1
+        )
+        
+        self.metrics = dict(zip(self.model.model.metrics_names, results))
         
         # Calculate F1 score
-        f1_score = 2 * (val_precision * val_recall) / (val_precision + val_recall + 1e-7)
+        precision = self.metrics.get('precision', 0)
+        recall = self.metrics.get('recall', 0)
+        self.metrics['f1_score'] = 2 * (precision * recall) / (precision + recall + 1e-7)
         
-        print("\n" + "="*60)
-        print("FINAL PERFORMANCE METRICS")
-        print("="*60)
-        print(f"Validation Loss:      {val_loss:.4f}")
-        print(f"Validation Accuracy:  {val_acc:.4f} ({val_acc*100:.2f}%)")
-        print(f"Precision:            {val_precision:.4f}")
-        print(f"Recall:               {val_recall:.4f}")
-        print(f"F1 Score:             {f1_score:.4f}")
-        print(f"AUC:                  {val_auc:.4f}")
-        print("="*60 + "\n")
+        # Print results
+        print("\n" + "-" * 40)
+        print("📈 FINAL METRICS")
+        print("-" * 40)
+        for k, v in self.metrics.items():
+            print(f"   {k:15s}: {v:.4f}")
+        print("-" * 40)
         
-        return {
-            'loss': val_loss,
-            'accuracy': val_acc,
-            'precision': val_precision,
-            'recall': val_recall,
-            'f1_score': f1_score,
-            'auc': val_auc
-        }
+        return self.metrics
     
-    def generate_predictions(self):
-        """
-        Generate predictions for confusion matrix and classification report.
+    def plot_training_history(self):
+        """Plot training history curves."""
+        print("\n📊 Generating training history plots...")
         
-        Returns:
-            tuple: (y_true, y_pred)
-        """
-        # Reset generator
-        self.data_ingestion.val_generator.reset()
+        fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+        metrics_to_plot = ['accuracy', 'loss', 'precision', 'recall']
+        colors = ['#2ecc71', '#e74c3c', '#3498db', '#9b59b6']
+        
+        for ax, metric, color in zip(axes.flat, metrics_to_plot, colors):
+            if metric in self.history.history:
+                epochs = range(1, len(self.history.history[metric]) + 1)
+                
+                ax.plot(epochs, self.history.history[metric], 
+                       label='Train', linewidth=2, color=color)
+                ax.plot(epochs, self.history.history[f'val_{metric}'], 
+                       label='Validation', linewidth=2, color=color, linestyle='--')
+                
+                ax.set_title(metric.upper(), fontsize=12, fontweight='bold')
+                ax.set_xlabel('Epoch')
+                ax.set_ylabel(metric.capitalize())
+                ax.legend(loc='best')
+                ax.grid(True, alpha=0.3)
+                
+                # Add best value annotation
+                best_val = max(self.history.history[f'val_{metric}']) if metric != 'loss' \
+                          else min(self.history.history[f'val_{metric}'])
+                ax.axhline(y=best_val, color='gray', linestyle=':', alpha=0.5)
+        
+        plt.suptitle('Training History', fontsize=14, fontweight='bold')
+        plt.tight_layout()
+        
+        save_path = self.output_path / 'training_history.png'
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.show()
+        plt.close()
+        
+        print(f"   Saved to: {save_path}")
+    
+    def plot_confusion_matrix(self):
+        """Generate and plot confusion matrix."""
+        print("📊 Generating confusion matrix...")
         
         # Get predictions
-        predictions = self.model_wrapper.model.predict(
-            self.data_ingestion.val_generator,
+        self.data.val_generator.reset()
+        predictions = self.model.model.predict(
+            self.data.val_generator,
             verbose=1
         )
         y_pred = np.argmax(predictions, axis=1)
+        y_true = self.data.val_generator.classes
         
-        # Get true labels
-        y_true = self.data_ingestion.val_generator.classes
-        
-        return y_true, y_pred
-    
-    def plot_training_history(self):
-        """Plot training and validation metrics over epochs."""
-        if self.history is None:
-            print("No training history available")
-            return
-        
-        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-        
-        # Accuracy
-        axes[0, 0].plot(self.history.history['accuracy'], label='Train')
-        axes[0, 0].plot(self.history.history['val_accuracy'], label='Validation')
-        axes[0, 0].set_title('Model Accuracy', fontsize=14, fontweight='bold')
-        axes[0, 0].set_xlabel('Epoch')
-        axes[0, 0].set_ylabel('Accuracy')
-        axes[0, 0].legend()
-        axes[0, 0].grid(True, alpha=0.3)
-        
-        # Loss
-        axes[0, 1].plot(self.history.history['loss'], label='Train')
-        axes[0, 1].plot(self.history.history['val_loss'], label='Validation')
-        axes[0, 1].set_title('Model Loss', fontsize=14, fontweight='bold')
-        axes[0, 1].set_xlabel('Epoch')
-        axes[0, 1].set_ylabel('Loss')
-        axes[0, 1].legend()
-        axes[0, 1].grid(True, alpha=0.3)
-        
-        # Precision
-        axes[1, 0].plot(self.history.history['precision'], label='Train')
-        axes[1, 0].plot(self.history.history['val_precision'], label='Validation')
-        axes[1, 0].set_title('Model Precision', fontsize=14, fontweight='bold')
-        axes[1, 0].set_xlabel('Epoch')
-        axes[1, 0].set_ylabel('Precision')
-        axes[1, 0].legend()
-        axes[1, 0].grid(True, alpha=0.3)
-        
-        # Recall
-        axes[1, 1].plot(self.history.history['recall'], label='Train')
-        axes[1, 1].plot(self.history.history['val_recall'], label='Validation')
-        axes[1, 1].set_title('Model Recall', fontsize=14, fontweight='bold')
-        axes[1, 1].set_xlabel('Epoch')
-        axes[1, 1].set_ylabel('Recall')
-        axes[1, 1].legend()
-        axes[1, 1].grid(True, alpha=0.3)
-        
-        plt.tight_layout()
-        plt.savefig(self.output_path / 'training_history.png', dpi=300, bbox_inches='tight')
-        print(f"✓ Training history plot saved to: {self.output_path / 'training_history.png'}")
-        plt.show()
-    
-    def plot_confusion_matrix(self, y_true, y_pred):
-        """
-        Plot confusion matrix for model predictions.
-        
-        Args:
-            y_true (array): True labels
-            y_pred (array): Predicted labels
-        """
+        # Compute confusion matrix
         cm = confusion_matrix(y_true, y_pred)
+        cm_normalized = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
         
-        plt.figure(figsize=(12, 10))
+        # Plot
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        
+        # Raw counts
         sns.heatmap(
-            cm,
-            annot=True,
-            fmt='d',
-            cmap='Blues',
-            xticklabels=self.data_ingestion.class_names,
-            yticklabels=self.data_ingestion.class_names,
-            cbar_kws={'label': 'Count'}
+            cm, annot=True, fmt='d', cmap='Blues',
+            xticklabels=self.data.class_names,
+            yticklabels=self.data.class_names,
+            ax=axes[0],
+            annot_kws={'size': 11}
         )
-        plt.title('Confusion Matrix - PCB Defect Classification', 
-                 fontsize=16, fontweight='bold', pad=20)
-        plt.xlabel('Predicted Label', fontsize=12)
-        plt.ylabel('True Label', fontsize=12)
-        plt.xticks(rotation=45, ha='right')
-        plt.yticks(rotation=0)
-        plt.tight_layout()
-        plt.savefig(self.output_path / 'confusion_matrix.png', dpi=300, bbox_inches='tight')
-        print(f"✓ Confusion matrix saved to: {self.output_path / 'confusion_matrix.png'}")
-        plt.show()
-    
-    def print_classification_report(self, y_true, y_pred):
-        """
-        Print detailed classification report.
+        axes[0].set_title('Confusion Matrix (Counts)', fontsize=12, fontweight='bold')
+        axes[0].set_xlabel('Predicted', fontsize=11)
+        axes[0].set_ylabel('True', fontsize=11)
+        axes[0].tick_params(axis='x', rotation=45)
         
-        Args:
-            y_true (array): True labels
-            y_pred (array): Predicted labels
-        """
-        print("\n" + "="*60)
-        print("CLASSIFICATION REPORT")
-        print("="*60)
+        # Normalized
+        sns.heatmap(
+            cm_normalized, annot=True, fmt='.2%', cmap='Blues',
+            xticklabels=self.data.class_names,
+            yticklabels=self.data.class_names,
+            ax=axes[1],
+            annot_kws={'size': 11}
+        )
+        axes[1].set_title('Confusion Matrix (Normalized)', fontsize=12, fontweight='bold')
+        axes[1].set_xlabel('Predicted', fontsize=11)
+        axes[1].set_ylabel('True', fontsize=11)
+        axes[1].tick_params(axis='x', rotation=45)
+        
+        plt.tight_layout()
+        
+        save_path = self.output_path / 'confusion_matrix.png'
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.show()
+        plt.close()
+        
+        print(f"   Saved to: {save_path}")
+        
+        return cm, y_true, y_pred
+    
+    def plot_roc_curves(self, y_true, predictions):
+        """Plot ROC curves for each class."""
+        print("📊 Generating ROC curves...")
+        
+        # Binarize labels
+        y_true_bin = label_binarize(y_true, classes=range(self.data.num_classes))
+        
+        # Compute ROC curve for each class
+        fig, ax = plt.subplots(figsize=(10, 8))
+        colors = plt.cm.Set1(np.linspace(0, 1, self.data.num_classes))
+        
+        for i, (class_name, color) in enumerate(zip(self.data.class_names, colors)):
+            fpr, tpr, _ = roc_curve(y_true_bin[:, i], predictions[:, i])
+            roc_auc = auc(fpr, tpr)
+            ax.plot(fpr, tpr, color=color, lw=2,
+                   label=f'{class_name} (AUC = {roc_auc:.3f})')
+        
+        ax.plot([0, 1], [0, 1], 'k--', lw=2, label='Random')
+        ax.set_xlim([0.0, 1.0])
+        ax.set_ylim([0.0, 1.05])
+        ax.set_xlabel('False Positive Rate', fontsize=11)
+        ax.set_ylabel('True Positive Rate', fontsize=11)
+        ax.set_title('ROC Curves per Class', fontsize=12, fontweight='bold')
+        ax.legend(loc='lower right')
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        save_path = self.output_path / 'roc_curves.png'
+        plt.savefig(save_path, dpi=150, bbox_inches='tight')
+        plt.show()
+        plt.close()
+        
+        print(f"   Saved to: {save_path}")
+    
+    def generate_classification_report(self, y_true, y_pred):
+        """Generate and save classification report."""
+        print("📊 Generating classification report...")
+        
         report = classification_report(
-            y_true,
-            y_pred,
-            target_names=self.data_ingestion.class_names,
+            y_true, y_pred,
+            target_names=self.data.class_names,
             digits=4
         )
+        
+        print("\n" + "=" * 60)
+        print("📋 CLASSIFICATION REPORT")
+        print("=" * 60)
         print(report)
         
-        # Save report to file
-        report_path = self.output_path / 'classification_report.txt'
-        with open(report_path, 'w') as f:
+        # Save to file
+        save_path = self.output_path / 'classification_report.txt'
+        with open(save_path, 'w') as f:
+            f.write("PCB Defect Classification Report\n")
+            f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write("=" * 60 + "\n\n")
             f.write(report)
-        print(f"✓ Classification report saved to: {report_path}")
+        
+        print(f"   Saved to: {save_path}")
+        
+        return report
     
     def save_model(self):
-        """Save trained model in multiple formats for deployment."""
-        print("\nPHASE 5: MODEL EXPORT")
-        print("-" * 60)
+        """Save model in multiple formats."""
+        print("\n💾 Saving model...")
         
-        # Save in Keras format
-        keras_path = self.output_path / 'pcb_defect_model.h5'
-        self.model_wrapper.model.save(keras_path)
-        print(f"✓ Keras model saved to: {keras_path}")
+        # Keras format (recommended)
+        keras_path = self.output_path / 'pcb_model.keras'
+        self.model.model.save(keras_path)
+        print(f"   ✅ Keras format: {keras_path}")
         
-        # Save in SavedModel format (for TensorFlow Serving)
+        # H5 format (legacy)
+        h5_path = self.output_path / 'pcb_model.h5'
+        self.model.model.save(h5_path)
+        print(f"   ✅ H5 format: {h5_path}")
+        
+        # SavedModel format (for TF Serving)
         savedmodel_path = self.output_path / 'saved_model'
-        self.model_wrapper.model.save(savedmodel_path)
-        print(f"✓ SavedModel format saved to: {savedmodel_path}")
+        self.model.model.save(savedmodel_path)
+        print(f"   ✅ SavedModel: {savedmodel_path}")
         
-        # Save model architecture as JSON
-        model_json = self.model_wrapper.model.to_json()
-        json_path = self.output_path / 'model_architecture.json'
-        with open(json_path, 'w') as f:
-            f.write(model_json)
-        print(f"✓ Model architecture saved to: {json_path}")
-        
-        print("\n✓ All model artifacts saved successfully")
+        # Model size
+        model_size = keras_path.stat().st_size / (1024 * 1024)
+        print(f"\n   📦 Model size: {model_size:.2f} MB")
     
-    def run_pipeline(self):
-        """
-        Execute the complete training pipeline.
+    def run_pipeline(self, fine_tune=True, visualize_augmentation=False):
+        """Execute complete training pipeline.
         
-        This is the main entry point for training the PCB defect detector.
+        Args:
+            fine_tune: Whether to perform fine-tuning phase
+            visualize_augmentation: Whether to visualize augmentation effects
         """
-        try:
-            # Phase 1: Data Setup
-            self.setup_data()
-            
-            # Phase 2: Model Setup
-            self.setup_model()
-            
-            # Phase 3: Training
-            self.train_model()
-            
-            # Phase 4: Evaluation
-            metrics = self.evaluate_model()
-            
-            # Generate predictions
-            y_true, y_pred = self.generate_predictions()
-            
-            # Visualizations
-            self.plot_training_history()
-            self.plot_confusion_matrix(y_true, y_pred)
-            self.print_classification_report(y_true, y_pred)
-            
-            # Phase 5: Save Model
-            self.save_model()
-            
-            print("\n" + "="*60)
-            print("PIPELINE COMPLETED SUCCESSFULLY")
-            print("="*60)
-            print("The model is ready for deployment in industrial AOI systems.")
-            print(f"All artifacts saved to: {self.output_path}")
-            print("="*60 + "\n")
-            
-            return metrics
-            
-        except Exception as e:
-            print(f"\n❌ Error in training pipeline: {e}")
-            raise
+        # Setup
+        self.setup_data()
+        
+        if visualize_augmentation:
+            self.data.visualize_augmentation()
+        
+        self.setup_model()
+        
+        # Training
+        self.train()
+        
+        if fine_tune:
+            self.fine_tune()
+        
+        # Evaluation
+        self.metrics = self.evaluate()
+        
+        # Visualizations
+        self.plot_training_history()
+        cm, y_true, y_pred = self.plot_confusion_matrix()
+        
+        # Get predictions for ROC curves
+        self.data.val_generator.reset()
+        predictions = self.model.model.predict(self.data.val_generator, verbose=0)
+        self.plot_roc_curves(y_true, predictions)
+        
+        # Reports
+        self.generate_classification_report(y_true, y_pred)
+        
+        # Save
+        self.save_model()
+        
+        # Final summary
+        print("\n" + "=" * 60)
+        print("🎉 TRAINING COMPLETE!")
+        print("=" * 60)
+        print(f"   📊 Final Accuracy: {self.metrics['accuracy']:.2%}")
+        print(f"   📊 Final F1 Score: {self.metrics['f1_score']:.2%}")
+        print(f"   📊 Final AUC: {self.metrics.get('auc', 0):.4f}")
+        print(f"   📁 Output directory: {self.output_path}")
+        print("=" * 60 + "\n")
+        
+        return self.metrics

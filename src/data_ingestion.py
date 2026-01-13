@@ -1,179 +1,188 @@
-"""
-Data Ingestion Module for PCB Defect Detection.
-
-Handles dataset loading, preprocessing, class imbalance detection,
-and data augmentation for industrial AOI applications.
-"""
+"""Data ingestion module for PCB Defect Detection."""
 
 import numpy as np
-import tensorflow as tf
 from pathlib import Path
+from collections import Counter
+import tensorflow as tf
+from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from src.config import Config
 
 
 class DataIngestion:
-    """
-    Manages data loading, preprocessing, and augmentation for PCB defect images.
+    """Handles data loading, preprocessing, and augmentation for PCB defect images."""
     
-    This class handles:
-    - Directory-based image loading
-    - Class imbalance detection and weight computation
-    - Data augmentation to simulate conveyor belt variations
-    - Train/validation splitting
-    """
+    SUPPORTED_FORMATS = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.JPG", "*.PNG")
     
     def __init__(self, data_path=None):
-        """
-        Initialize data ingestion pipeline.
-        
-        Args:
-            data_path (Path, optional): Path to dataset. Auto-detects if None.
-        """
-        self.data_path = data_path or Config.get_data_path()
+        self.data_path = Path(data_path) if data_path else Config.get_data_path()
         self.img_size = Config.IMG_SIZE
         self.batch_size = Config.BATCH_SIZE
         self.validation_split = Config.VALIDATION_SPLIT
         
         self.train_generator = None
         self.val_generator = None
+        self.test_generator = None
+        
         self.class_names = None
         self.num_classes = None
         self.class_weights = None
+        self.dataset_stats = None
+    
+    def _get_all_images(self, directory):
+        """Get all image files from a directory."""
+        images = []
+        for fmt in self.SUPPORTED_FORMATS:
+            images.extend(list(Path(directory).glob(fmt)))
+        return images
+    
+    def _count_images(self, directory):
+        """Count images in a directory."""
+        return len(self._get_all_images(directory))
+    
+    def _find_data_root(self):
+        """Find the correct data root containing class folders."""
+        if Config._has_class_folders(self.data_path):
+            return self.data_path
         
-        print(f"Data path: {self.data_path}")
+        # Search common subdirectories
+        for subdir in ["", "images", "PCB_DATASET/images", "PCB_DATASET", "data"]:
+            candidate = self.data_path / subdir if subdir else self.data_path
+            if candidate.exists() and Config._has_class_folders(candidate):
+                return candidate
+        
+        return self.data_path
     
     def analyze_dataset(self):
-        """
-        Analyze dataset structure and class distribution.
+        """Analyze dataset structure and class distribution."""
+        self.data_path = self._find_data_root()
         
-        Returns:
-            dict: Dataset statistics including class counts and imbalance ratio
-        """
         if not self.data_path.exists():
-            raise FileNotFoundError(f"Dataset not found at: {self.data_path}")
+            raise FileNotFoundError(f"Dataset not found: {self.data_path}")
         
         # Get class directories
-        class_dirs = [d for d in self.data_path.iterdir() if d.is_dir()]
+        class_dirs = sorted([
+            d for d in self.data_path.iterdir() 
+            if d.is_dir() and not d.name.startswith('.')
+        ])
         
         if not class_dirs:
             raise ValueError(f"No class directories found in: {self.data_path}")
         
+        # Collect statistics
         stats = {}
-        total_images = 0
+        total = 0
+        min_count = float('inf')
+        max_count = 0
         
-        for class_dir in class_dirs:
-            image_files = list(class_dir.glob("*.jpg")) + \
-                         list(class_dir.glob("*.png")) + \
-                         list(class_dir.glob("*.jpeg"))
-            count = len(image_files)
-            stats[class_dir.name] = count
-            total_images += count
+        for d in class_dirs:
+            count = self._count_images(d)
+            if count > 0:
+                stats[d.name] = count
+                total += count
+                min_count = min(min_count, count)
+                max_count = max(max_count, count)
+        
+        if total == 0:
+            raise ValueError(f"No images found in: {self.data_path}")
         
         # Calculate imbalance ratio
-        if stats:
-            max_count = max(stats.values())
-            min_count = min(stats.values())
-            imbalance_ratio = max_count / min_count if min_count > 0 else float('inf')
-        else:
-            imbalance_ratio = 1.0
+        imbalance_ratio = max_count / min_count if min_count > 0 else float('inf')
         
-        print("\n" + "="*60)
-        print("DATASET ANALYSIS")
-        print("="*60)
-        print(f"Total Images: {total_images}")
-        print(f"Number of Classes: {len(stats)}")
-        print(f"Imbalance Ratio: {imbalance_ratio:.2f}")
-        print("\nClass Distribution:")
-        for class_name, count in sorted(stats.items()):
-            percentage = (count / total_images * 100) if total_images > 0 else 0
-            print(f"  {class_name:20s}: {count:5d} images ({percentage:5.2f}%)")
-        print("="*60 + "\n")
-        
-        return {
-            "total_images": total_images,
-            "num_classes": len(stats),
-            "class_distribution": stats,
-            "imbalance_ratio": imbalance_ratio
+        self.dataset_stats = {
+            "total": total,
+            "classes": len(stats),
+            "distribution": stats,
+            "min_samples": min_count,
+            "max_samples": max_count,
+            "imbalance_ratio": imbalance_ratio,
+            "avg_samples_per_class": total / len(stats)
         }
+        
+        # Print analysis
+        self._print_dataset_analysis()
+        
+        return self.dataset_stats
+    
+    def _print_dataset_analysis(self):
+        """Print formatted dataset analysis."""
+        stats = self.dataset_stats
+        
+        print("\n" + "=" * 60)
+        print("📊 DATASET ANALYSIS")
+        print("=" * 60)
+        print(f"📁 Path: {self.data_path}")
+        print(f"🖼️  Total images: {stats['total']}")
+        print(f"🏷️  Classes: {stats['classes']}")
+        print(f"📈 Avg per class: {stats['avg_samples_per_class']:.1f}")
+        print(f"⚖️  Imbalance ratio: {stats['imbalance_ratio']:.2f}")
+        print("-" * 60)
+        print("Class Distribution:")
+        print("-" * 60)
+        
+        for name, count in sorted(stats['distribution'].items()):
+            pct = count / stats['total'] * 100
+            bar_len = int(pct / 100 * 30)
+            bar = "█" * bar_len + "░" * (30 - bar_len)
+            print(f"  {name:20s} │ {bar} │ {count:4d} ({pct:5.1f}%)")
+        
+        print("=" * 60 + "\n")
     
     def compute_class_weights(self):
-        """
-        Compute class weights to handle imbalanced datasets.
-        
-        This is critical for PCB defect detection where some defect types
-        may be rarer than others in the training data.
-        
-        Returns:
-            dict: Class weights for loss function balancing
-        """
-        # Get all image paths and labels
-        image_paths = []
-        labels = []
-        
-        class_dirs = sorted([d for d in self.data_path.iterdir() if d.is_dir()])
+        """Compute class weights to handle imbalanced data."""
+        class_dirs = sorted([
+            d for d in self.data_path.iterdir() 
+            if d.is_dir() and self._count_images(d) > 0
+        ])
         self.class_names = [d.name for d in class_dirs]
         
-        for idx, class_dir in enumerate(class_dirs):
-            image_files = list(class_dir.glob("*.jpg")) + \
-                         list(class_dir.glob("*.png")) + \
-                         list(class_dir.glob("*.jpeg"))
-            labels.extend([idx] * len(image_files))
+        # Build label array
+        labels = []
+        for idx, d in enumerate(class_dirs):
+            count = self._count_images(d)
+            labels.extend([idx] * count)
         
-        # Compute weights
-        labels_array = np.array(labels)
-        class_weights_array = compute_class_weight(
-            class_weight='balanced',
-            classes=np.unique(labels_array),
-            y=labels_array
+        # Compute balanced weights
+        weights = compute_class_weight(
+            'balanced', 
+            classes=np.unique(labels), 
+            y=labels
         )
+        self.class_weights = dict(enumerate(weights))
         
-        self.class_weights = dict(enumerate(class_weights_array))
-        
-        print("Class Weights (for handling imbalance):")
-        for idx, weight in self.class_weights.items():
-            print(f"  {self.class_names[idx]:20s}: {weight:.4f}")
+        print("⚖️  Class weights (for imbalance correction):")
+        for idx, name in enumerate(self.class_names):
+            print(f"   {name}: {self.class_weights[idx]:.3f}")
         print()
         
         return self.class_weights
     
-    def create_data_generators(self, use_tf_data=False):
-        """
-        Create training and validation data generators with augmentation.
+    def create_generators(self):
+        """Create training and validation data generators with augmentation."""
         
-        Augmentation simulates real-world variations in PCB positioning
-        on conveyor belts and camera angles in industrial settings.
-        
-        Args:
-            use_tf_data (bool): Use tf.data API for better performance
-        
-        Returns:
-            tuple: (train_generator, val_generator)
-        """
-        if use_tf_data:
-            return self._create_tf_data_pipeline()
-        
-        # Training data augmentation (robust for small datasets)
+        # Training augmentation - optimized for PCB images
         train_datagen = ImageDataGenerator(
             rescale=1./255,
             rotation_range=Config.ROTATION_RANGE,
             width_shift_range=Config.WIDTH_SHIFT_RANGE,
             height_shift_range=Config.HEIGHT_SHIFT_RANGE,
+            shear_range=Config.SHEAR_RANGE,
             zoom_range=Config.ZOOM_RANGE,
             horizontal_flip=Config.HORIZONTAL_FLIP,
             vertical_flip=Config.VERTICAL_FLIP,
-            fill_mode='nearest',
+            brightness_range=Config.BRIGHTNESS_RANGE,
+            fill_mode=Config.FILL_MODE,
             validation_split=self.validation_split
         )
         
-        # Validation data (no augmentation, only rescaling)
+        # Validation - no augmentation, only rescale
         val_datagen = ImageDataGenerator(
             rescale=1./255,
             validation_split=self.validation_split
         )
         
-        # Create training generator
+        # Create generators
         self.train_generator = train_datagen.flow_from_directory(
             self.data_path,
             target_size=self.img_size,
@@ -181,10 +190,10 @@ class DataIngestion:
             class_mode='categorical',
             subset='training',
             shuffle=True,
-            seed=Config.RANDOM_SEED
+            seed=Config.RANDOM_SEED,
+            interpolation='bilinear'
         )
         
-        # Create validation generator
         self.val_generator = val_datagen.flow_from_directory(
             self.data_path,
             target_size=self.img_size,
@@ -192,37 +201,93 @@ class DataIngestion:
             class_mode='categorical',
             subset='validation',
             shuffle=False,
-            seed=Config.RANDOM_SEED
+            seed=Config.RANDOM_SEED,
+            interpolation='bilinear'
         )
         
+        # Update class info
         self.class_names = list(self.train_generator.class_indices.keys())
         self.num_classes = len(self.class_names)
         
-        print(f"Training samples: {self.train_generator.samples}")
-        print(f"Validation samples: {self.val_generator.samples}")
-        print(f"Number of classes: {self.num_classes}")
-        print(f"Class names: {self.class_names}\n")
+        print("✅ Data generators created:")
+        print(f"   Training samples: {self.train_generator.samples}")
+        print(f"   Validation samples: {self.val_generator.samples}")
+        print(f"   Batch size: {self.batch_size}")
+        print(f"   Image size: {self.img_size}")
+        print(f"   Classes: {self.class_names}")
+        print()
         
         return self.train_generator, self.val_generator
     
-    def _create_tf_data_pipeline(self):
-        """
-        Create optimized tf.data pipeline for better performance.
-        
-        Returns:
-            tuple: (train_dataset, val_dataset)
-        """
-        # This is a placeholder for tf.data implementation
-        # Can be implemented for production use
-        raise NotImplementedError("tf.data pipeline not yet implemented")
-    
-    def get_steps_per_epoch(self):
-        """
-        Calculate steps per epoch for training and validation.
-        
-        Returns:
-            tuple: (train_steps, val_steps)
-        """
-        train_steps = self.train_generator.samples // self.batch_size
-        val_steps = self.val_generator.samples // self.batch_size
+    def get_steps(self):
+        """Return steps per epoch for train and validation."""
+        train_steps = max(1, self.train_generator.samples // self.batch_size)
+        val_steps = max(1, self.val_generator.samples // self.batch_size)
         return train_steps, val_steps
+    
+    def get_sample_batch(self):
+        """Get a sample batch for visualization."""
+        self.train_generator.reset()
+        images, labels = next(self.train_generator)
+        return images, labels
+    
+    def get_class_indices(self):
+        """Return mapping of class names to indices."""
+        return self.train_generator.class_indices
+    
+    def visualize_augmentation(self, num_samples=5):
+        """Visualize augmentation effects on sample images."""
+        import matplotlib.pyplot as plt
+        
+        # Get one image per class
+        fig, axes = plt.subplots(self.num_classes, num_samples + 1, 
+                                  figsize=(3 * (num_samples + 1), 3 * self.num_classes))
+        
+        for class_idx, class_name in enumerate(self.class_names):
+            class_dir = self.data_path / class_name
+            images = self._get_all_images(class_dir)
+            
+            if not images:
+                continue
+                
+            # Load original image
+            img = tf.keras.preprocessing.image.load_img(
+                images[0], target_size=self.img_size
+            )
+            img_array = tf.keras.preprocessing.image.img_to_array(img)
+            
+            # Show original
+            axes[class_idx, 0].imshow(img_array.astype('uint8'))
+            axes[class_idx, 0].set_title(f'{class_name}\n(Original)')
+            axes[class_idx, 0].axis('off')
+            
+            # Show augmented versions
+            datagen = ImageDataGenerator(
+                rotation_range=Config.ROTATION_RANGE,
+                width_shift_range=Config.WIDTH_SHIFT_RANGE,
+                height_shift_range=Config.HEIGHT_SHIFT_RANGE,
+                zoom_range=Config.ZOOM_RANGE,
+                horizontal_flip=Config.HORIZONTAL_FLIP,
+                vertical_flip=Config.VERTICAL_FLIP,
+                brightness_range=Config.BRIGHTNESS_RANGE,
+                fill_mode=Config.FILL_MODE
+            )
+            
+            img_batch = np.expand_dims(img_array, 0)
+            aug_iter = datagen.flow(img_batch, batch_size=1)
+            
+            for i in range(num_samples):
+                aug_img = next(aug_iter)[0].astype('uint8')
+                axes[class_idx, i + 1].imshow(aug_img)
+                axes[class_idx, i + 1].set_title(f'Aug {i + 1}')
+                axes[class_idx, i + 1].axis('off')
+        
+        plt.suptitle('Data Augmentation Preview', fontsize=14, fontweight='bold')
+        plt.tight_layout()
+        
+        output_path = Config.get_output_path() / 'augmentation_preview.png'
+        plt.savefig(output_path, dpi=150, bbox_inches='tight')
+        plt.show()
+        plt.close()
+        
+        print(f"📸 Augmentation preview saved to: {output_path}")

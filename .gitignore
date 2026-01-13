@@ -1,58 +1,46 @@
-# Data
-data/
-*.zip
-
-# Model outputs
-checkpoints/
-results/
-output/
-*.keras
-*.h5
-*.tflite
-*.pb
-saved_model/
-logs/
-
 # Python
 __pycache__/
 *.py[cod]
+*$py.class
+*.so
+.Python
 *.egg-info/
 .eggs/
 dist/
 build/
-*.egg
-.Python
+
+# Virtual environments
 venv/
 env/
-ENV/
-
-# Logs
-*.log
-pipeline.log
+.env
 
 # IDE
-.vscode/
 .idea/
+.vscode/
 *.swp
+*.swo
 
 # Jupyter
 .ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data & Models (large files)
+data/
+output/
+*.h5
+*.keras
+*.tflite
+saved_model/
+logs/
+
+# Kaggle
+kaggle.json
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Kaggle credentials
-.kaggle/
-kaggle.json
-
-# Images (except documentation)
-*.png
-*.jpg
-*.jpeg
-!notebooks/*.png
-!docs/*.png
-
-# Environment
-.env
-.venv
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
