@@ -1,6 +1,8 @@
-# PCB Defect Detector
+# PCB Defect Detector - Kaggle Training Pipeline
 
 Production-grade deep learning pipeline for detecting defects in Printed Circuit Boards using transfer learning.
+
+**Optimized for Kaggle Notebooks**
 
 ## Dataset
 
@@ -15,158 +17,164 @@ Production-grade deep learning pipeline for detecting defects in Printed Circuit
 ## Features
 
 ✅ Transfer learning (MobileNetV2, ResNet50, EfficientNetB0)  
-✅ Automatic class weight balancing for imbalanced data  
+✅ Automatic class weight balancing  
 ✅ Two-phase training: frozen base → fine-tuning  
-✅ Advanced data augmentation pipeline  
-✅ Comprehensive evaluation (F1, precision, recall, confusion matrix)  
-✅ Auto-detection of environment (Kaggle/Colab/Local)  
+✅ Advanced data augmentation  
+✅ Comprehensive evaluation metrics  
 
 ## Project Structure
 
 ```
 pcb-defect-detector/
-├── config.py              # Configuration with auto-detection
-├── data_manager.py        # Dataset loading & parsing
-├── data_pipeline.py       # Data splits, augmentation, tf.data
-├── model_builder.py       # Transfer learning models
-├── trainer.py             # Training with fine-tuning
-├── evaluator.py           # Metrics & visualizations
-├── main.py                # CLI entry point
-├── train_notebook.ipynb   # Jupyter notebook for Kaggle
-├── requirements.txt
-└── README.md
+├── config.py              # Configuration
+├── data_manager.py        # Dataset loading
+├── data_pipeline.py       # Data preprocessing
+├── model_builder.py       # Model architecture
+├── trainer.py             # Training logic
+├── evaluator.py           # Evaluation & metrics
+├── train_notebook.ipynb   # Main notebook
+└── requirements.txt       # Dependencies
 ```
 
-## Quick Start
+## 🚀 How to Use on Kaggle
 
-### On Kaggle
+### Step 1: Create Notebook
+- Go to [Kaggle](https://www.kaggle.com)
+- Click **"Create"** → **"New Notebook"**
 
-**Method 1: Upload Notebook (Recommended)**
+### Step 2: Add Dataset
+- Click **"+ Add Data"** (top right)
+- Search: `akhatova/pcb-defects`
+- Click **"Add"**
+
+### Step 3: Enable GPU
+- Click **⋮** (3 dots, top right)
+- Select **"Accelerator"** → **"GPU T4 x2"**
+- Click **"Save"**
+
+### Step 4: Run Code
+
+**Option A: Upload Notebook (Easiest)**
 1. Download [train_notebook.ipynb](https://github.com/alainpaluku/pcb-defect-detector/blob/main/train_notebook.ipynb)
-2. Go to Kaggle → Create → Upload Notebook
-3. Add dataset: `akhatova/pcb-defects`
-4. Enable GPU: Settings → Accelerator → GPU T4 x2
-5. Run all cells
+2. In Kaggle: **File** → **Upload Notebook**
+3. Click **"Run All"**
 
-**Method 2: Clone in Notebook**
+**Option B: Clone Repository**
+
+Copy this into a cell and run:
+
 ```python
-!git clone https://github.com/alainpaluku/pcb-defect-detector.git
-%cd pcb-defect-detector
-!python main.py --epochs 25 --finetune-epochs 15
-```
-
-### Local Training
-
-```bash
 # Clone repository
-git clone https://github.com/alainpaluku/pcb-defect-detector.git
-cd pcb-defect-detector
+!git clone https://github.com/alainpaluku/pcb-defect-detector.git
+import sys
+sys.path.insert(0, 'pcb-defect-detector')
 
-# Install dependencies
-pip install -r requirements.txt
+# Import modules
+from pathlib import Path
+from config import PipelineConfig, DataConfig, ModelConfig, TrainingConfig
+from data_manager import KaggleDataManager
+from data_pipeline import DataPipeline
+from model_builder import PCBModelBuilder
+from trainer import Trainer
+from evaluator import Evaluator
 
-# Set Kaggle credentials
-export KAGGLE_API_TOKEN='{"username":"your_username","key":"your_api_key"}'
+# Configure
+config = PipelineConfig(
+    data=DataConfig(data_dir=Path('/kaggle/input/pcb-defects')),
+    training=TrainingConfig(
+        epochs=25,
+        fine_tune_epochs=15,
+        checkpoint_dir=Path('/kaggle/working/checkpoints')
+    ),
+    results_dir=Path('/kaggle/working/results')
+)
 
-# Train with default settings
-python main.py
+# Load data
+dm = KaggleDataManager(config.data)
+dm.download_dataset()
+class_images = dm.parse_directory_structure()
+class_names = dm.get_class_names()
 
-# Or customize
-python main.py --epochs 30 --model ResNet50 --finetune-epochs 20
+# Prepare pipeline
+dp = DataPipeline(config.data, class_names)
+dp.prepare_data(class_images)
+
+# Build model
+mb = PCBModelBuilder(config.model, config.data, len(class_names))
+model = mb.build()
+
+# Train
+trainer = Trainer(config.training, model)
+trainer.compile()
+trainer.train(dp.get_train_dataset(), dp.get_val_dataset(), dp.get_class_weights())
+
+# Fine-tune
+mb.unfreeze_layers(30)
+trainer.fine_tune(dp.get_train_dataset(), dp.get_val_dataset(), dp.get_class_weights())
+
+# Evaluate
+evaluator = Evaluator(model, class_names, config.results_dir)
+results = evaluator.generate_full_report(
+    dp.get_test_dataset(), 
+    dp.get_test_labels(),
+    trainer.get_combined_history(),
+    dp.get_test_paths()
+)
+
+print(f"\n✅ Training Complete!")
+print(f"Test Accuracy: {results['test_accuracy']:.4f}")
+print(f"F1 Macro: {results['f1_macro']:.4f}")
+
+# Display results
+from IPython.display import Image, display
+display(Image(str(config.results_dir / 'training_curves.png')))
+display(Image(str(config.results_dir / 'confusion_matrix_normalized.png')))
 ```
 
-## CLI Options
+## Output Files
 
-```bash
-python main.py [OPTIONS]
+After training, find results in `/kaggle/working/`:
 
-Options:
-  --epochs N              Training epochs (default: 30)
-  --batch-size N          Batch size (default: 32)
-  --lr RATE               Learning rate (default: 1e-3)
-  --model NAME            MobileNetV2|ResNet50|EfficientNetB0
-  --no-finetune           Skip fine-tuning phase
-  --finetune-epochs N     Fine-tuning epochs (default: 20)
-```
-
-## Output
-
-After training, you'll find:
-
-- `checkpoints/` - Saved model weights
-  - `best.keras` - Best model from phase 1
-  - `ft_best.keras` - Best model from fine-tuning
-  - `final_model.keras` - Final trained model
-  
-- `results/` - Evaluation artifacts
-  - `confusion_matrix_normalized.png` - Normalized confusion matrix
-  - `confusion_matrix.png` - Raw confusion matrix
-  - `training_curves.png` - Loss and accuracy plots
-  - `misclassified.png` - Examples of misclassified images
-  - `classification_report.txt` - Detailed metrics per class
+- `checkpoints/best.keras` - Best model (phase 1)
+- `checkpoints/ft_best.keras` - Best model (fine-tuned)
+- `results/confusion_matrix_normalized.png`
+- `results/training_curves.png`
+- `results/misclassified.png`
+- `results/classification_report.txt`
 
 ## Architecture
 
-**Base Model:** MobileNetV2 (pretrained on ImageNet)  
-**Custom Head:**
-- Global Average Pooling
-- Batch Normalization
-- Dense(256) + ReLU + L2 regularization
-- Dropout(0.5)
-- Dense(6) + Softmax
+- **Base:** MobileNetV2 (ImageNet pretrained)
+- **Head:** GAP → BatchNorm → Dense(256) → Dropout(0.5) → Dense(6)
+- **Training:** 2-phase (frozen → fine-tuned)
 
-**Training Strategy:**
-1. Phase 1: Train with frozen base (25-30 epochs)
-2. Phase 2: Fine-tune last 30 layers (15-20 epochs)
+## Expected Performance
 
-## Expected Results
-
-Performance on test set:
 - Accuracy: ~92-95%
 - F1 Macro: ~0.90-0.93
-- F1 Weighted: ~0.92-0.95
+- Training time: ~30-40 min (GPU T4 x2)
+
+## Troubleshooting
+
+**Error: Dataset not found**
+→ Make sure you added `akhatova/pcb-defects` dataset
+
+**Error: Out of memory**
+→ Enable GPU or reduce batch size in config
+
+**Error: git clone forbidden**
+→ Use "Upload Notebook" method instead
 
 ## Requirements
 
 - Python 3.8+
 - TensorFlow 2.10+
-- See `requirements.txt` for full list
-
-## Troubleshooting
-
-### Kaggle: "git clone" forbidden
-
-**Solution:** Upload `train_notebook.ipynb` directly instead of cloning.
-
-### Dataset not found
-
-**Solution:** Make sure you added the dataset in Kaggle:
-1. Click "+ Add Data"
-2. Search "akhatova/pcb-defects"
-3. Click "Add"
-
-### Out of memory
-
-**Solution:** 
-- Enable GPU in Kaggle settings
-- Or reduce batch size: `--batch-size 16`
+- See `requirements.txt`
 
 ## License
 
-MIT License
+MIT
 
 ## Author
 
 Alain Paluku - [GitHub](https://github.com/alainpaluku)
-
-## Citation
-
-If you use this code, please cite:
-```
-@software{pcb_defect_detector,
-  author = {Paluku, Alain},
-  title = {PCB Defect Detector},
-  year = {2025},
-  url = {https://github.com/alainpaluku/pcb-defect-detector}
-}
-```
