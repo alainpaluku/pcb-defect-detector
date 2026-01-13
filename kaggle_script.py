@@ -43,6 +43,44 @@ SEED = 42
 CHECKPOINT_DIR.mkdir(parents=True, exist_ok=True)
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
+# ============== DIAGNOSTIC (Run this first if you have issues) ==============
+def diagnose_dataset():
+    """Diagnostic function to explore dataset structure."""
+    print("=" * 60)
+    print("DATASET DIAGNOSTIC")
+    print("=" * 60)
+    
+    if not DATA_DIR.exists():
+        print(f"❌ ERROR: {DATA_DIR} does not exist!")
+        print("\nSOLUTION: Add the dataset in Kaggle:")
+        print("  1. Click '+ Add Data'")
+        print("  2. Search 'akhatova/pcb-defects'")
+        print("  3. Click 'Add'")
+        return
+    
+    print(f"✓ Dataset directory exists: {DATA_DIR}\n")
+    print("Directory structure:")
+    
+    valid_ext = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
+    
+    for item in sorted(DATA_DIR.rglob('*'))[:50]:  # Limit to first 50 items
+        depth = len(item.relative_to(DATA_DIR).parts)
+        if depth > 3:  # Limit depth
+            continue
+        indent = "  " * (depth - 1)
+        if item.is_dir():
+            print(f"{indent}📁 {item.name}/")
+        elif item.suffix.lower() in valid_ext:
+            print(f"{indent}🖼️  {item.name}")
+    
+    print("\n" + "=" * 60)
+    print("If you see image files above, the dataset is correctly loaded.")
+    print("=" * 60)
+
+# Uncomment the line below to run diagnostics
+# diagnose_dataset()
+
+
 # ============== DATA LOADING ==============
 def find_dataset() -> Path:
     """Find dataset root directory."""
@@ -59,27 +97,59 @@ def find_dataset() -> Path:
             f"{'='*60}\n"
         )
     
+    logger.info(f"Exploring dataset structure in {DATA_DIR}...")
+    
+    # List all items in DATA_DIR
+    items = list(DATA_DIR.iterdir())
+    logger.info(f"Found {len(items)} items: {[item.name for item in items]}")
+    
+    # Helper function to check if a directory contains image subdirectories
+    def has_image_subdirs(path: Path) -> bool:
+        if not path.is_dir():
+            return False
+        subdirs = [d for d in path.iterdir() if d.is_dir()]
+        if not subdirs:
+            return False
+        # Check if subdirectories contain images
+        valid_ext = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
+        for subdir in subdirs[:3]:  # Check first 3 subdirs
+            images = [f for f in subdir.iterdir() if f.suffix.lower() in valid_ext]
+            if images:
+                return True
+        return False
+    
     # Try common dataset structures
     candidates = [
         DATA_DIR / 'PCB_DATASET',
         DATA_DIR / 'pcb_defects',
+        DATA_DIR / 'images',
         DATA_DIR
     ]
     
     for path in candidates:
-        if path.exists():
-            subdirs = [d for d in path.iterdir() if d.is_dir()]
-            if subdirs:
-                logger.info(f"Found dataset at: {path}")
-                return path
+        if path.exists() and has_image_subdirs(path):
+            logger.info(f"✓ Found dataset at: {path}")
+            return path
     
-    # Search all subdirectories
-    for item in DATA_DIR.iterdir():
-        if item.is_dir():
-            logger.info(f"Found dataset at: {item}")
+    # Search all subdirectories recursively (up to 2 levels)
+    for item in DATA_DIR.rglob('*'):
+        if item.is_dir() and has_image_subdirs(item):
+            logger.info(f"✓ Found dataset at: {item}")
             return item
     
-    raise FileNotFoundError(f"Dataset structure not recognized in {DATA_DIR}")
+    # If still not found, show directory structure for debugging
+    logger.error("Dataset structure exploration:")
+    for item in items:
+        logger.error(f"  - {item.name} ({'dir' if item.is_dir() else 'file'})")
+        if item.is_dir():
+            subdirs = list(item.iterdir())[:5]
+            for subdir in subdirs:
+                logger.error(f"    - {subdir.name}")
+    
+    raise FileNotFoundError(
+        f"Dataset structure not recognized in {DATA_DIR}\n"
+        f"Please check the directory structure above and update DATA_DIR path."
+    )
 
 def parse_dataset(dataset_path: Path) -> Tuple[Dict[str, List[Path]], List[str]]:
     """Parse dataset directory structure."""
