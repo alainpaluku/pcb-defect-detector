@@ -63,16 +63,29 @@ class Config:
         ├── spur/
         └── spurious_copper/
         """
-        # Chemins Kaggle possibles
+        from pathlib import Path
+        
+        # Chemins Kaggle possibles (ordre de priorité)
         kaggle_paths = [
-            Path("/kaggle/input/pcb-defects"),
-            Path("/kaggle/input/pcb-defects/PCB_DATASET/images"),
-            Path("/kaggle/input/pcb-defects/images"),
+            "/kaggle/input/pcb-defects",
+            "/kaggle/input/pcb-defects/PCB_DATASET/images",
+            "/kaggle/input/pcb-defects/images",
+            "/kaggle/input/pcb-defects/PCB_DATASET",
         ]
         
+        # Chercher dans les chemins Kaggle
         for p in kaggle_paths:
-            if p.exists() and Config._has_class_folders(p):
-                return p
+            path = Path(p)
+            if path.exists():
+                # Vérifier si contient les dossiers de classes
+                if Config._has_class_folders(path):
+                    print(f"📁 Dataset found at: {path}")
+                    return path
+                # Sinon chercher dans les sous-dossiers
+                for subdir in path.iterdir():
+                    if subdir.is_dir() and Config._has_class_folders(subdir):
+                        print(f"📁 Dataset found at: {subdir}")
+                        return subdir
         
         # Local
         local_path = Path("data/pcb-defects")
