@@ -93,27 +93,38 @@ class Config:
         if Config.is_kaggle():
             kaggle_input = Path("/kaggle/input")
             
-            # List all datasets in /kaggle/input
+            # Search all datasets and subdirectories
             if kaggle_input.exists():
                 for dataset_folder in kaggle_input.iterdir():
                     if dataset_folder.is_dir():
-                        # Search for class folders in this dataset
-                        found = Config._find_data_in_path(dataset_folder)
-                        if found:
-                            print(f"📁 Dataset found: {found}")
-                            return found
+                        # Check dataset root
+                        if Config._has_class_folders(dataset_folder):
+                            print(f"📁 Dataset found: {dataset_folder}")
+                            return dataset_folder
+                        
+                        # Check all subdirectories (PCB_DATASET, images, etc.)
+                        for subdir in dataset_folder.iterdir():
+                            if subdir.is_dir():
+                                if Config._has_class_folders(subdir):
+                                    print(f"📁 Dataset found: {subdir}")
+                                    return subdir
+                                # One more level deep
+                                for subsubdir in subdir.iterdir():
+                                    if subsubdir.is_dir() and Config._has_class_folders(subsubdir):
+                                        print(f"📁 Dataset found: {subsubdir}")
+                                        return subsubdir
             
             # Fallback: try common paths
             common_paths = [
+                "/kaggle/input/pcb-defects/PCB_DATASET",
                 "/kaggle/input/pcb-defects",
                 "/kaggle/input/pcbdefects", 
-                "/kaggle/input/pcb-defect",
             ]
             for p in common_paths:
-                found = Config._find_data_in_path(p)
-                if found:
-                    print(f"📁 Dataset found: {found}")
-                    return found
+                path = Path(p)
+                if path.exists() and Config._has_class_folders(path):
+                    print(f"📁 Dataset found: {path}")
+                    return path
         
         # Local
         local_paths = [

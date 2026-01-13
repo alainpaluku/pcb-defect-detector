@@ -84,10 +84,27 @@ if Config.is_kaggle():
         print("   Please add dataset 'akhatova/pcb-defects' to your notebook")
         sys.exit(1)
 
-data_path = Config.get_data_path()
+# Force correct path detection for Kaggle
+from pathlib import Path
+possible_paths = [
+    Path("/kaggle/input/pcb-defects/PCB_DATASET"),
+    Path("/kaggle/input/pcb-defects"),
+    Path("/kaggle/input/pcbdefects/PCB_DATASET"),
+    Path("/kaggle/input/pcbdefects"),
+]
+
+data_path = None
+for p in possible_paths:
+    if p.exists() and any((p / c).exists() for c in Config.DEFECT_CLASSES):
+        data_path = p
+        break
+
+if data_path is None:
+    data_path = Config.get_data_path()
+
 print(f"\n   Data path: {data_path}")
 
-if not data_path.exists():
+if not data_path or not data_path.exists():
     print(f"\n❌ ERROR: Dataset not found at {data_path}")
     print("\n👉 Please add the dataset 'akhatova/pcb-defects' to your Kaggle notebook:")
     print("   1. Click '+ Add Input' on the right panel")
@@ -105,15 +122,33 @@ if len(classes_found) == 0:
     sys.exit(1)
 
 # ============================================================
-# 5. RUN TRAINING
+# 5. RUN TRAINING (with correct data path)
 # ============================================================
 print("\n" + "=" * 60)
 print("🏋️ STARTING TRAINING PIPELINE")
 print("=" * 60)
 
-# Initialize and run
+# Initialize and run with explicit data path
+from src.data_ingestion import DataIngestion
+from src.model import PCBClassifier
+
 trainer = TrainingManager()
-metrics = trainer.run_pipeline(fine_tune=True)
+trainer.data = DataIngestion(data_path=data_path)
+trainer.data.analyze_dataset()
+trainer.data.compute_class_weights()
+trainer.data.create_generators()
+trainer.setup_model()
+trainer.train()
+trainer.fine_tune()
+metrics = trainer.evaluate()
+trainer.plot_training_history()
+trainer.plot_confusion_matrix()
+trainer.data.val_generator.reset()
+predictions = trainer.model.model.predict(trainer.data.val_generator, verbose=0)
+y_true = trainer.data.val_generator.classes
+trainer.plot_roc_curves(y_true, predictions)
+trainer.generate_classification_report(y_true, np.argmax(predictions, axis=1))
+trainer.save_model()
 
 # ============================================================
 # 6. SUMMARY
