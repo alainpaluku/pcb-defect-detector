@@ -51,53 +51,82 @@ class Config:
     FINE_TUNE_LR = 1e-5
     
     @staticmethod
-    def get_data_path():
-        """Return dataset path (auto-detects Kaggle vs local).
-        
-        Dataset structure on Kaggle:
-        /kaggle/input/pcb-defects/
-        ├── missing_hole/
-        ├── mouse_bite/
-        ├── open_circuit/
-        ├── short/
-        ├── spur/
-        └── spurious_copper/
-        """
-        from pathlib import Path
-        
-        # Chemins Kaggle possibles (ordre de priorité)
-        kaggle_paths = [
-            "/kaggle/input/pcb-defects",
-            "/kaggle/input/pcb-defects/PCB_DATASET/images",
-            "/kaggle/input/pcb-defects/images",
-            "/kaggle/input/pcb-defects/PCB_DATASET",
-        ]
-        
-        # Chercher dans les chemins Kaggle
-        for p in kaggle_paths:
-            path = Path(p)
-            if path.exists():
-                # Vérifier si contient les dossiers de classes
-                if Config._has_class_folders(path):
-                    print(f"📁 Dataset found at: {path}")
-                    return path
-                # Sinon chercher dans les sous-dossiers
-                for subdir in path.iterdir():
-                    if subdir.is_dir() and Config._has_class_folders(subdir):
-                        print(f"📁 Dataset found at: {subdir}")
-                        return subdir
-        
-        # Local
-        local_path = Path("data/pcb-defects")
-        if local_path.exists():
-            return local_path
-            
-        return Path("data/pcb-defects")
+    def is_kaggle():
+        """Check if running in Kaggle environment."""
+        return os.path.exists("/kaggle/input")
     
     @staticmethod
     def _has_class_folders(path):
         """Check if path contains class folders."""
+        path = Path(path)
+        if not path.exists():
+            return False
         return any((path / cls).exists() for cls in Config.DEFECT_CLASSES)
+    
+    @staticmethod
+    def _find_data_in_path(base_path):
+        """Recursively find the folder containing class directories."""
+        base_path = Path(base_path)
+        
+        # Check if base path has class folders
+        if Config._has_class_folders(base_path):
+            return base_path
+        
+        # Check subdirectories (max 2 levels deep)
+        if base_path.exists():
+            for item in base_path.iterdir():
+                if item.is_dir():
+                    if Config._has_class_folders(item):
+                        return item
+                    # One more level
+                    for subitem in item.iterdir():
+                        if subitem.is_dir() and Config._has_class_folders(subitem):
+                            return subitem
+        
+        return None
+    
+    @staticmethod
+    def get_data_path():
+        """Return dataset path (auto-detects Kaggle vs local)."""
+        
+        # On Kaggle
+        if Config.is_kaggle():
+            kaggle_input = Path("/kaggle/input")
+            
+            # List all datasets in /kaggle/input
+            if kaggle_input.exists():
+                for dataset_folder in kaggle_input.iterdir():
+                    if dataset_folder.is_dir():
+                        # Search for class folders in this dataset
+                        found = Config._find_data_in_path(dataset_folder)
+                        if found:
+                            print(f"📁 Dataset found: {found}")
+                            return found
+            
+            # Fallback: try common paths
+            common_paths = [
+                "/kaggle/input/pcb-defects",
+                "/kaggle/input/pcbdefects", 
+                "/kaggle/input/pcb-defect",
+            ]
+            for p in common_paths:
+                found = Config._find_data_in_path(p)
+                if found:
+                    print(f"📁 Dataset found: {found}")
+                    return found
+        
+        # Local
+        local_paths = [
+            "data/pcb-defects",
+            "data",
+            "../data/pcb-defects",
+        ]
+        for p in local_paths:
+            found = Config._find_data_in_path(p)
+            if found:
+                return found
+        
+        return Path("data/pcb-defects")
     
     @staticmethod
     def get_output_path():
@@ -107,11 +136,6 @@ class Config:
         output_dir = Path("output")
         output_dir.mkdir(exist_ok=True)
         return output_dir
-    
-    @staticmethod
-    def is_kaggle():
-        """Check if running in Kaggle environment."""
-        return os.path.exists("/kaggle/input")
     
     @staticmethod
     def get_device_info():
