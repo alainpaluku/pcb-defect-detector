@@ -2,26 +2,16 @@
 
 import numpy as np
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Tuple
+
+# Supported image formats
+SUPPORTED_IMAGE_FORMATS: Tuple[str, ...] = (
+    "*.jpg", "*.jpeg", "*.png", "*.bmp",
+    "*.JPG", "*.JPEG", "*.PNG", "*.BMP"
+)
 
 
-def count_images(directory: Path, formats: tuple = ("*.jpg", "*.jpeg", "*.png", "*.bmp")) -> int:
-    """Count images in a directory.
-    
-    Args:
-        directory: Path to directory
-        formats: Tuple of file patterns to match
-        
-    Returns:
-        Number of images found
-    """
-    count = 0
-    for fmt in formats:
-        count += len(list(directory.glob(fmt)))
-    return count
-
-
-def get_all_images(directory: Path, formats: tuple = ("*.jpg", "*.jpeg", "*.png", "*.bmp")) -> List[Path]:
+def get_all_images(directory: Path, formats: tuple = SUPPORTED_IMAGE_FORMATS) -> List[Path]:
     """Get all image files from a directory.
     
     Args:
@@ -32,9 +22,29 @@ def get_all_images(directory: Path, formats: tuple = ("*.jpg", "*.jpeg", "*.png"
         List of image paths
     """
     images = []
+    # Ensure directory exists
+    if not directory.exists():
+        return images
+
     for fmt in formats:
         images.extend(list(directory.glob(fmt)))
     return images
+
+
+def count_images(directory: Path, formats: tuple = SUPPORTED_IMAGE_FORMATS) -> int:
+    """Count images in a directory.
+    
+    Args:
+        directory: Path to directory
+        formats: Tuple of file patterns to match
+        
+    Returns:
+        Number of images found
+    """
+    # Optimized count avoiding creating full list if possible?
+    # Actually list(glob) creates the list anyway.
+    # So reusing get_all_images is cleaner.
+    return len(get_all_images(directory, formats))
 
 
 def format_bytes(size_bytes: int) -> str:

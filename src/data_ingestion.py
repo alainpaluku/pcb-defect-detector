@@ -2,19 +2,16 @@
 
 import numpy as np
 from pathlib import Path
-from collections import Counter
 import tensorflow as tf
-from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from src.config import Config
-from src.utils import count_images, get_all_images, print_section_header, print_subsection
+from src.utils import count_images, SUPPORTED_IMAGE_FORMATS
+from src.visualization import Visualizer
 
 
 class DataIngestion:
     """Handles data loading, preprocessing, and augmentation for PCB defect images."""
-    
-    SUPPORTED_FORMATS = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.JPG", "*.PNG")
     
     def __init__(self, data_path=None):
         self.data_path = Path(data_path) if data_path else Config.get_data_path()
@@ -24,35 +21,18 @@ class DataIngestion:
         
         self.train_generator = None
         self.val_generator = None
-        self.test_generator = None
         
         self.class_names = None
         self.num_classes = None
         self.class_weights = None
         self.dataset_stats = None
     
-    def _find_data_root(self):
-        """Find the correct data root containing class folders."""
-        if Config._has_class_folders(self.data_path):
-            return self.data_path
-        
-        # Search common subdirectories
-        subdirs_to_check = ["", "images", "PCB_DATASET/images", "PCB_DATASET", "data", "train", "Images"]
-        for subdir in subdirs_to_check:
-            candidate = self.data_path / subdir if subdir else self.data_path
-            try:
-                if candidate.exists() and Config._has_class_folders(candidate):
-                    return candidate
-            except PermissionError:
-                continue
-        
-        return self.data_path
-    
     def analyze_dataset(self):
         """Analyze dataset structure and class distribution."""
-        self.data_path = self._find_data_root()
-        
+        # Check if data path exists
         if not self.data_path.exists():
+            # Try to find it again using Config logic if seemingly missing?
+            # Config.get_data_path() already does the search.
             raise FileNotFoundError(f"Dataset not found: {self.data_path}")
         
         # Get class directories
@@ -65,6 +45,8 @@ class DataIngestion:
             raise PermissionError(f"Cannot access dataset directory: {self.data_path}") from e
         
         if not class_dirs:
+            # Maybe we are not at the root with class folders?
+            # Config.get_data_path() is supposed to return the folder WITH class folders.
             raise ValueError(f"No class directories found in: {self.data_path}")
         
         # Collect statistics
@@ -75,7 +57,7 @@ class DataIngestion:
         
         for d in class_dirs:
             try:
-                count = count_images(d, self.SUPPORTED_FORMATS)
+                count = count_images(d)
                 if count > 0:
                     stats[d.name] = count
                     total += count
@@ -101,43 +83,23 @@ class DataIngestion:
             "avg_samples_per_class": total / len(stats) if len(stats) > 0 else 0
         }
         
-        # Print analysis
-        self._print_dataset_analysis()
+        # Print analysis using Visualizer
+        Visualizer.print_dataset_analysis(self.dataset_stats, self.data_path)
         
         return self.dataset_stats
-    
-    def _print_dataset_analysis(self):
-        """Print formatted dataset analysis."""
-        stats = self.dataset_stats
-        
-        print_section_header("📊 DATASET ANALYSIS")
-        print(f"📁 Path: {self.data_path}")
-        print(f"🖼️  Total images: {stats['total']}")
-        print(f"🏷️  Classes: {stats['classes']}")
-        print(f"📈 Avg per class: {stats['avg_samples_per_class']:.1f}")
-        print(f"⚖️  Imbalance ratio: {stats['imbalance_ratio']:.2f}")
-        print_subsection("Class Distribution:")
-        
-        for name, count in sorted(stats['distribution'].items()):
-            pct = count / stats['total'] * 100
-            bar_len = int(pct / 100 * 30)
-            bar = "█" * bar_len + "░" * (30 - bar_len)
-            print(f"  {name:20s} │ {bar} │ {count:4d} ({pct:5.1f}%)")
-        
-        print("=" * 60 + "\n")
     
     def compute_class_weights(self):
         """Compute class weights to handle imbalanced data."""
         class_dirs = sorted([
             d for d in self.data_path.iterdir() 
-            if d.is_dir() and count_images(d, self.SUPPORTED_FORMATS) > 0
+            if d.is_dir() and count_images(d) > 0
         ])
         self.class_names = [d.name for d in class_dirs]
         
         # Build label array
         labels = []
         for idx, d in enumerate(class_dirs):
-            count = count_images(d, self.SUPPORTED_FORMATS)
+            count = count_images(d)
             labels.extend([idx] * count)
         
         # Compute balanced weights
@@ -249,61 +211,3 @@ class DataIngestion:
     def get_class_indices(self):
         """Return mapping of class names to indices."""
         return self.train_generator.class_indices
-    
-    def visualize_augmentation(self, num_samples=5):
-        """Visualize augmentation effects on sample images."""
-        import matplotlib.pyplot as plt
-        from src.utils import get_all_images
-        
-        # Get one image per class
-        fig, axes = plt.subplots(self.num_classes, num_samples + 1, 
-                                  figsize=(3 * (num_samples + 1), 3 * self.num_classes))
-        
-        for class_idx, class_name in enumerate(self.class_names):
-            class_dir = self.data_path / class_name
-            images = get_all_images(class_dir, self.SUPPORTED_FORMATS)
-            
-            if not images:
-                continue
-                
-            # Load original image
-            img = tf.keras.preprocessing.image.load_img(
-                images[0], target_size=self.img_size
-            )
-            img_array = tf.keras.preprocessing.image.img_to_array(img)
-            
-            # Show original
-            axes[class_idx, 0].imshow(img_array.astype('uint8'))
-            axes[class_idx, 0].set_title(f'{class_name}\n(Original)')
-            axes[class_idx, 0].axis('off')
-            
-            # Show augmented versions
-            datagen = ImageDataGenerator(
-                rotation_range=Config.ROTATION_RANGE,
-                width_shift_range=Config.WIDTH_SHIFT_RANGE,
-                height_shift_range=Config.HEIGHT_SHIFT_RANGE,
-                zoom_range=Config.ZOOM_RANGE,
-                horizontal_flip=Config.HORIZONTAL_FLIP,
-                vertical_flip=Config.VERTICAL_FLIP,
-                brightness_range=Config.BRIGHTNESS_RANGE,
-                fill_mode=Config.FILL_MODE
-            )
-            
-            img_batch = np.expand_dims(img_array, 0)
-            aug_iter = datagen.flow(img_batch, batch_size=1)
-            
-            for i in range(num_samples):
-                aug_img = next(aug_iter)[0].astype('uint8')
-                axes[class_idx, i + 1].imshow(aug_img)
-                axes[class_idx, i + 1].set_title(f'Aug {i + 1}')
-                axes[class_idx, i + 1].axis('off')
-        
-        plt.suptitle('Data Augmentation Preview', fontsize=14, fontweight='bold')
-        plt.tight_layout()
-        
-        output_path = Config.get_output_path() / 'augmentation_preview.png'
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        plt.show()
-        plt.close()
-        
-        print(f"📸 Augmentation preview saved to: {output_path}")
