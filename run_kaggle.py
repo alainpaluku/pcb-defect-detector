@@ -167,14 +167,16 @@ data_path = find_pcb_dataset()
 if data_path is None:
     # Fallback to Config
     data_path = Config.get_data_path()
-    if not data_path.exists():
-        print(f"\n❌ ERROR: Dataset not found!")
-        print("\n👉 Please add the dataset 'akhatova/pcb-defects' to your Kaggle notebook:")
-        print("   1. Click '+ Add Input' on the right panel")
-        print("   2. Search for 'akhatova/pcb-defects'")
-        print("   3. Click 'Add' to add it")
-        print("   4. Re-run this script")
-        sys.exit(1)
+
+# Verify dataset exists and has images
+if not data_path.exists():
+    print(f"\n❌ ERROR: Dataset path does not exist: {data_path}")
+    print("\n👉 Please add the dataset 'akhatova/pcb-defects' to your Kaggle notebook:")
+    print("   1. Click '+ Add Input' on the right panel")
+    print("   2. Search for 'akhatova/pcb-defects'")
+    print("   3. Click 'Add' to add it")
+    print("   4. Re-run this script")
+    sys.exit(1)
 
 print(f"\n   📁 Using data path: {data_path}")
 
@@ -182,8 +184,12 @@ print(f"\n   📁 Using data path: {data_path}")
 all_possible_classes = list(set(Config.DEFECT_CLASSES + Config.DEFECT_CLASSES_ALT))
 classes_found = [c for c in all_possible_classes if (data_path / c).exists()]
 print(f"   Classes found: {len(classes_found)}/6")
+
+total_images = 0
 for cls in classes_found:
-    count = len(list((data_path / cls).glob("*")))
+    images = list((data_path / cls).glob("*.jpg")) + list((data_path / cls).glob("*.png")) + list((data_path / cls).glob("*.JPG"))
+    count = len(images)
+    total_images += count
     print(f"      - {cls}: {count} images")
 
 if len(classes_found) < 3:
@@ -197,6 +203,16 @@ if len(classes_found) < 3:
     print("   3. Click 'Add' to add it")
     print("   4. Re-run this script")
     sys.exit(1)
+
+if total_images == 0:
+    print(f"\n❌ ERROR: No images found in class folders!")
+    print(f"   Path checked: {data_path}")
+    print(f"   Classes checked: {classes_found}")
+    print(f"\n👉 The dataset might be corrupted or in wrong format")
+    sys.exit(1)
+
+print(f"\n   ✅ Total images: {total_images}")
+print(f"   ✅ Dataset ready for training!")
 
 # ============================================================
 # 5. RUN TRAINING
