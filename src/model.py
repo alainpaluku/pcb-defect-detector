@@ -1,230 +1,152 @@
-"""Model architecture for PCB Defect Detection using MobileNetV2."""
+"""YOLOv8 Model for PCB Defect Detection."""
 
-import numpy as np
-import tensorflow as tf
-from tensorflow.keras import layers, models, regularizers
-from tensorflow.keras.applications import MobileNetV2
+from pathlib import Path
 from src.config import Config
 
 
-class PCBClassifier:
-    """MobileNetV2-based classifier for PCB defect detection.
+class PCBDetector:
+    """YOLOv8-based detector for PCB defects."""
     
-    Architecture optimized for:
-    - Small dataset (~1400 images)
-    - 6 defect classes
-    - Edge deployment (~14MB model)
-    """
-    
-    def __init__(self, num_classes=Config.NUM_CLASSES, img_size=Config.IMG_SIZE):
-        self.num_classes = num_classes
-        self.img_size = img_size
+    def __init__(self, model_path=None):
+        """Initialize detector.
+        
+        Args:
+            model_path: Path to trained model or pretrained model name
+        """
+        self.model_path = model_path or Config.MODEL_NAME
         self.model = None
-        self.base_model = None
-        
-    def build_model(self, dropout_rate=0.3, l2_reg=0.001):
-        """Build MobileNetV2-based classification model.
+        self._load_model()
+    
+    def _load_model(self):
+        """Load YOLO model."""
+        try:
+            from ultralytics import YOLO
+            self.model = YOLO(self.model_path)
+            print(f"Model loaded: {self.model_path}")
+        except ImportError:
+            raise ImportError("ultralytics not installed. Run: pip install ultralytics")
+    
+    def train(self, data_yaml, epochs=None, batch_size=None, img_size=None, 
+              project=None, name="pcb_yolo"):
+        """Train the model.
         
         Args:
-            dropout_rate: Dropout rate for regularization
-            l2_reg: L2 regularization factor
-            
+            data_yaml: Path to dataset YAML config
+            epochs: Number of training epochs
+            batch_size: Batch size
+            img_size: Image size
+            project: Output project directory
+            name: Experiment name
+        
         Returns:
-            Compiled Keras model
+            Training results
         """
-        # Load pre-trained MobileNetV2
-        self.base_model = MobileNetV2(
-            input_shape=(*self.img_size, 3),
-            include_top=False,
-            weights='imagenet',
-            alpha=1.0
+        epochs = epochs or Config.EPOCHS
+        batch_size = batch_size or Config.BATCH_SIZE
+        img_size = img_size or Config.IMG_SIZE
+        project = project or str(Config.get_output_path())
+        
+        print(f"\nTraining YOLOv8 for {epochs} epochs...")
+        print(f"Dataset: {data_yaml}")
+        print(f"Batch size: {batch_size}, Image size: {img_size}")
+        
+        results = self.model.train(
+            data=str(data_yaml),
+            epochs=epochs,
+            imgsz=img_size,
+            batch=batch_size,
+            patience=Config.PATIENCE,
+            save=True,
+            project=project,
+            name=name,
+            exist_ok=True,
+            pretrained=True,
+            optimizer=Config.OPTIMIZER,
+            lr0=Config.LEARNING_RATE,
+            augment=Config.AUGMENT,
+            mosaic=Config.MOSAIC,
+            mixup=Config.MIXUP,
+            verbose=True,
         )
         
-        # Freeze base model initially
-        self.base_model.trainable = False
-        
-        # Build classification head
-        inputs = layers.Input(shape=(*self.img_size, 3), name='input_image')
-        
-        # MobileNetV2 preprocessing (expects [0, 255], outputs [-1, 1])
-        x = tf.keras.applications.mobilenet_v2.preprocess_input(inputs)
-        
-        # Feature extraction
-        x = self.base_model(x, training=False)
-        
-        # Global pooling
-        x = layers.GlobalAveragePooling2D(name='global_pool')(x)
-        
-        # Simple head - less regularization
-        x = layers.Dense(
-            256,
-            activation='relu',
-            kernel_regularizer=regularizers.l2(l2_reg),
-            name='dense_1'
-        )(x)
-        x = layers.Dropout(dropout_rate, name='dropout_1')(x)
-        
-        # Output layer
-        outputs = layers.Dense(
-            self.num_classes, 
-            activation='softmax',
-            name='predictions'
-        )(x)
-        
-        self.model = models.Model(inputs=inputs, outputs=outputs, name='PCB_Classifier')
-        
-        return self.model
+        return results
     
-    def compile_model(self, learning_rate=Config.LEARNING_RATE):
-        """Compile model with optimizer and metrics.
+    def validate(self, data_yaml=None):
+        """Validate the model.
         
         Args:
-            learning_rate: Initial learning rate
-        """
-        optimizer = tf.keras.optimizers.Adam(
-            learning_rate=learning_rate,
-            beta_1=0.9,
-            beta_2=0.999,
-            epsilon=1e-07
-        )
+            data_yaml: Path to dataset YAML config
         
-        self.model.compile(
-            optimizer=optimizer,
-            loss='categorical_crossentropy',
-            metrics=[
-                'accuracy',
-                tf.keras.metrics.Precision(name='precision'),
-                tf.keras.metrics.Recall(name='recall'),
-                tf.keras.metrics.AUC(name='auc', curve='ROC'),
-                tf.keras.metrics.AUC(name='auc_pr', curve='PR')  # Precision-Recall AUC
-            ]
-        )
-        
-        print(f"✅ Model compiled with learning rate: {learning_rate}")
-    
-    def enable_fine_tuning(self, num_layers=Config.FINE_TUNE_LAYERS, 
-                           learning_rate=Config.FINE_TUNE_LR):
-        """Enable fine-tuning of base model layers.
-        
-        Args:
-            num_layers: Number of layers to unfreeze from the end
-            learning_rate: Learning rate for fine-tuning (should be low)
-        """
-        # Unfreeze base model
-        self.base_model.trainable = True
-        
-        # Freeze all layers except the last `num_layers`
-        for layer in self.base_model.layers[:-num_layers]:
-            layer.trainable = False
-        
-        # Count trainable parameters
-        trainable_count = sum(
-            tf.keras.backend.count_params(w) 
-            for w in self.model.trainable_weights
-        )
-        non_trainable_count = sum(
-            tf.keras.backend.count_params(w) 
-            for w in self.model.non_trainable_weights
-        )
-        
-        print(f"\n🔓 Fine-tuning enabled:")
-        print(f"   Unfrozen layers: {num_layers}")
-        print(f"   Trainable params: {trainable_count:,}")
-        print(f"   Non-trainable params: {non_trainable_count:,}")
-        
-        # Recompile with lower learning rate
-        self.compile_model(learning_rate=learning_rate)
-    
-    def get_model_summary(self):
-        """Print model summary with layer details."""
-        print("\n" + "=" * 60)
-        print("🏗️  MODEL ARCHITECTURE")
-        print("=" * 60)
-        self.model.summary()
-        
-        # Count parameters
-        total_params = self.model.count_params()
-        trainable_params = sum(
-            tf.keras.backend.count_params(w) 
-            for w in self.model.trainable_weights
-        )
-        
-        print(f"\n📊 Parameter Summary:")
-        print(f"   Total: {total_params:,}")
-        print(f"   Trainable: {trainable_params:,}")
-        print(f"   Non-trainable: {total_params - trainable_params:,}")
-        print(f"   Estimated size: {total_params * 4 / (1024**2):.2f} MB")
-        print("=" * 60 + "\n")
-    
-    def predict_single(self, image_path, class_names):
-        """Predict class for a single image.
-        
-        Args:
-            image_path: Path to image file
-            class_names: List of class names
-            
         Returns:
-            dict with prediction results
+            Validation metrics
         """
-        # Load and preprocess image (no rescale, preprocess_input is in model)
-        img = tf.keras.preprocessing.image.load_img(
-            image_path, target_size=self.img_size
+        metrics = self.model.val(data=data_yaml)
+        return metrics
+    
+    def predict(self, source, conf=None, iou=None, save=True, show=False):
+        """Run inference on images.
+        
+        Args:
+            source: Image path, directory, or URL
+            conf: Confidence threshold
+            iou: IoU threshold for NMS
+            save: Save results
+            show: Display results
+        
+        Returns:
+            Detection results
+        """
+        conf = conf or Config.CONF_THRESHOLD
+        iou = iou or Config.IOU_THRESHOLD
+        
+        results = self.model.predict(
+            source=source,
+            conf=conf,
+            iou=iou,
+            save=save,
+            show=show,
         )
-        img_array = tf.keras.preprocessing.image.img_to_array(img)
-        img_array = np.expand_dims(img_array, 0)  # Keep [0, 255] range
         
-        # Predict
-        predictions = self.model.predict(img_array, verbose=0)[0]
+        return results
+    
+    def export(self, format="onnx"):
+        """Export model to different formats.
         
-        # Get top prediction
-        top_idx = np.argmax(predictions)
+        Args:
+            format: Export format (onnx, torchscript, tflite, etc.)
         
+        Returns:
+            Path to exported model
+        """
+        print(f"Exporting model to {format}...")
+        path = self.model.export(format=format)
+        print(f"Exported: {path}")
+        return path
+    
+    def get_metrics(self, results):
+        """Extract metrics from validation results.
+        
+        Args:
+            results: Validation results from model.val()
+        
+        Returns:
+            Dictionary of metrics
+        """
         return {
-            'class': class_names[top_idx],
-            'confidence': float(predictions[top_idx]),
-            'all_probabilities': {
-                name: float(prob) 
-                for name, prob in zip(class_names, predictions)
-            }
+            "mAP50": float(results.box.map50),
+            "mAP50-95": float(results.box.map),
+            "precision": float(results.box.mp),
+            "recall": float(results.box.mr),
         }
     
-    def save(self, path, format='keras'):
-        """Save model to file.
+    @staticmethod
+    def load_trained(model_path):
+        """Load a trained model.
         
         Args:
-            path: Output path
-            format: 'keras', 'h5', or 'savedmodel'
-        """
-        from pathlib import Path
-        path = Path(path)
+            model_path: Path to trained .pt file
         
-        if format == 'keras':
-            self.model.save(path.with_suffix('.keras'))
-        elif format == 'h5':
-            self.model.save(path.with_suffix('.h5'))
-        elif format == 'savedmodel':
-            self.model.save(path)
-        else:
-            raise ValueError(f"Unknown format: {format}")
-        
-        print(f"💾 Model saved: {path}")
-    
-    @classmethod
-    def load(cls, path):
-        """Load model from file.
-        
-        Args:
-            path: Path to saved model
-            
         Returns:
-            PCBClassifier instance
+            PCBDetector instance
         """
-        model = tf.keras.models.load_model(path)
-        
-        instance = cls(
-            num_classes=model.output_shape[-1],
-            img_size=model.input_shape[1:3]
-        )
-        instance.model = model
-        
-        return instance
+        return PCBDetector(model_path=model_path)

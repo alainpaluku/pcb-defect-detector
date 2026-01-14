@@ -2,64 +2,78 @@
 
 import argparse
 import sys
-from src.config import Config
+from pathlib import Path
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description='🔬 PCB Defect Detection - MobileNetV2 Classifier',
+        description='PCB Defect Detection with YOLOv8',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter
     )
-    parser.add_argument('--download', action='store_true', 
-                        help='Download dataset from Kaggle')
-    parser.add_argument('--epochs', type=int, default=Config.EPOCHS,
-                        help='Number of training epochs')
-    parser.add_argument('--batch-size', type=int, default=Config.BATCH_SIZE,
-                        help='Batch size')
-    parser.add_argument('--lr', type=float, default=Config.LEARNING_RATE,
-                        help='Learning rate')
-    parser.add_argument('--no-fine-tune', action='store_true',
-                        help='Skip fine-tuning phase')
-    parser.add_argument('--visualize-aug', action='store_true',
-                        help='Visualize data augmentation')
+    
+    subparsers = parser.add_subparsers(dest='command', help='Commands')
+    
+    # Train command
+    train_parser = subparsers.add_parser('train', help='Train the model')
+    train_parser.add_argument('--data', type=str, help='Path to dataset')
+    train_parser.add_argument('--epochs', type=int, default=50, help='Number of epochs')
+    train_parser.add_argument('--batch', type=int, default=16, help='Batch size')
+    train_parser.add_argument('--img-size', type=int, default=640, help='Image size')
+    
+    # Detect command
+    detect_parser = subparsers.add_parser('detect', help='Run detection on images')
+    detect_parser.add_argument('source', type=str, help='Image or directory path')
+    detect_parser.add_argument('--model', type=str, help='Path to trained model')
+    detect_parser.add_argument('--conf', type=float, default=0.25, help='Confidence threshold')
+    detect_parser.add_argument('--save', action='store_true', help='Save results')
+    
+    # Export command
+    export_parser = subparsers.add_parser('export', help='Export model')
+    export_parser.add_argument('--model', type=str, required=True, help='Path to model')
+    export_parser.add_argument('--format', type=str, default='onnx', help='Export format')
+    
     args = parser.parse_args()
     
-    # Update config
-    Config.EPOCHS = args.epochs
-    Config.BATCH_SIZE = args.batch_size
-    Config.LEARNING_RATE = args.lr
-    
-    # Download dataset if requested
-    if args.download:
-        from src.kaggle_setup import KaggleSetup
-        setup = KaggleSetup()
-        result = setup.download_dataset(Config.KAGGLE_DATASET)
-        if not result:
-            print("❌ Failed to download dataset")
-            sys.exit(1)
-        print("✅ Dataset downloaded successfully")
-    
-    # Check dataset exists
-    data_path = Config.get_data_path()
-    if not data_path.exists():
-        print(f"❌ Error: Dataset not found at {data_path}")
-        print("\n📋 Options:")
-        print("  1. Run with --download to fetch from Kaggle")
-        print("  2. Manually place dataset in data/pcb-defects/")
-        print("  3. On Kaggle, add 'akhatova/pcb-defects' dataset")
-        sys.exit(1)
-    
-    # Import trainer (heavy imports)
-    from src.trainer import TrainingManager
-    
-    # Train
-    trainer = TrainingManager()
-    metrics = trainer.run_pipeline(
-        fine_tune=not args.no_fine_tune,
-        visualize_augmentation=args.visualize_aug
-    )
-    
-    return metrics
+    if args.command == 'train':
+        from src.trainer import TrainingManager
+        from src.config import Config
+        
+        if args.epochs:
+            Config.EPOCHS = args.epochs
+        if args.batch:
+            Config.BATCH_SIZE = args.batch
+        if args.img_size:
+            Config.IMG_SIZE = args.img_size
+        
+        trainer = TrainingManager(data_path=args.data)
+        metrics = trainer.run_pipeline()
+        
+        print(f"\nFinal mAP@50: {metrics.get('mAP50', 0):.4f}")
+        
+    elif args.command == 'detect':
+        from src.detector import PCBInspector
+        from src.utils import print_detection_results
+        
+        inspector = PCBInspector(model_path=args.model)
+        
+        source = Path(args.source)
+        if source.is_dir():
+            results = inspector.inspect_batch(source, conf=args.conf, save=args.save)
+            for img_name, detections in results.items():
+                print(f"\n{img_name}:")
+                print_detection_results(detections)
+        else:
+            detections = inspector.inspect(source, conf=args.conf, save=args.save)
+            print_detection_results(detections)
+            
+    elif args.command == 'export':
+        from src.model import PCBDetector
+        
+        detector = PCBDetector(model_path=args.model)
+        detector.export(format=args.format)
+        
+    else:
+        parser.print_help()
 
 
 if __name__ == "__main__":

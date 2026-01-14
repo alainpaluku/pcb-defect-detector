@@ -1,309 +1,262 @@
-"""Data ingestion module for PCB Defect Detection."""
+"""Data ingestion and conversion for PCB Defect Detection with YOLOv8."""
 
-import numpy as np
+import os
+import shutil
+import random
+import xml.etree.ElementTree as ET
 from pathlib import Path
-from collections import Counter
-import tensorflow as tf
-from sklearn.model_selection import train_test_split
-from sklearn.utils.class_weight import compute_class_weight
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from PIL import Image
 from src.config import Config
-from src.utils import count_images, get_all_images, print_section_header, print_subsection
 
 
 class DataIngestion:
-    """Handles data loading, preprocessing, and augmentation for PCB defect images."""
-    
-    SUPPORTED_FORMATS = ("*.jpg", "*.jpeg", "*.png", "*.bmp", "*.JPG", "*.PNG")
+    """Handles data loading and conversion to YOLO format."""
     
     def __init__(self, data_path=None):
         self.data_path = Path(data_path) if data_path else Config.get_data_path()
-        self.img_size = Config.IMG_SIZE
-        self.batch_size = Config.BATCH_SIZE
-        self.validation_split = Config.VALIDATION_SPLIT
+        self.yolo_path = Config.get_yolo_dataset_path()
+        self.images_dir = None
+        self.annot_dir = None
+        self.all_images = []
         
-        self.train_generator = None
-        self.val_generator = None
-        self.test_generator = None
+    def find_data_structure(self):
+        """Find images and annotations in the dataset."""
+        print(f"Searching in: {self.data_path}")
         
-        self.class_names = None
-        self.num_classes = None
-        self.class_weights = None
-        self.dataset_stats = None
-    
-    def _find_data_root(self):
-        """Find the correct data root containing class folders."""
-        if Config._has_class_folders(self.data_path):
-            return self.data_path
+        # Search for Annotations folder
+        for subdir in ["", "PCB_DATASET", "Annotations"]:
+            candidate = self.data_path / subdir / "Annotations" if subdir != "Annotations" else self.data_path / subdir
+            if candidate.exists() and list(candidate.glob("*.xml")):
+                self.annot_dir = candidate
+                break
         
-        # Search common subdirectories
-        subdirs_to_check = ["", "images", "PCB_DATASET/images", "PCB_DATASET", "data", "train", "Images"]
-        for subdir in subdirs_to_check:
-            candidate = self.data_path / subdir if subdir else self.data_path
-            try:
-                if candidate.exists() and Config._has_class_folders(candidate):
-                    return candidate
-            except PermissionError:
+        # Search for images
+        search_dirs = [
+            self.data_path,
+            self.data_path / "PCB_DATASET",
+            self.data_path / "PCB_DATASET" / "images",
+            self.data_path / "images",
+        ]
+        
+        for search_dir in search_dirs:
+            if not search_dir.exists():
                 continue
+            
+            # Check for class folders
+            class_folders = [c for c in Config.CLASS_MAP.keys() if (search_dir / c).exists()]
+            if class_folders:
+                self.images_dir = search_dir
+                break
+            
+            # Check for direct images
+            if list(search_dir.glob("*.jpg")) or list(search_dir.glob("*.JPG")):
+                self.images_dir = search_dir
+                break
         
-        return self.data_path
+        print(f"Images directory: {self.images_dir}")
+        print(f"Annotations directory: {self.annot_dir}")
+        
+        return self.images_dir is not None
     
-    def analyze_dataset(self):
-        """Analyze dataset structure and class distribution."""
-        self.data_path = self._find_data_root()
+    def collect_images(self):
+        """Collect all images with their annotations."""
+        self.all_images = []
         
-        if not self.data_path.exists():
-            raise FileNotFoundError(f"Dataset not found: {self.data_path}")
+        if self.annot_dir and self.annot_dir.exists():
+            # Use XML annotations
+            xml_files = list(self.annot_dir.glob("*.xml"))
+            print(f"Found {len(xml_files)} XML annotations")
+            
+            for xml_file in xml_files:
+                img_path = self._find_image_for_xml(xml_file)
+                if img_path:
+                    self.all_images.append({
+                        "image": img_path,
+                        "annotation": xml_file,
+                        "type": "xml"
+                    })
         
-        # Get class directories
-        try:
-            class_dirs = sorted([
-                d for d in self.data_path.iterdir() 
-                if d.is_dir() and not d.name.startswith('.')
-            ])
-        except PermissionError as e:
-            raise PermissionError(f"Cannot access dataset directory: {self.data_path}") from e
+        # Also collect from class folders
+        if self.images_dir:
+            for cls_name in Config.CLASS_MAP.keys():
+                cls_dir = self.images_dir / cls_name
+                if cls_dir.exists():
+                    for ext in ["*.jpg", "*.JPG", "*.png", "*.PNG"]:
+                        for img_path in cls_dir.glob(ext):
+                            # Check if already added via XML
+                            if not any(item["image"] == img_path for item in self.all_images):
+                                self.all_images.append({
+                                    "image": img_path,
+                                    "class": cls_name,
+                                    "type": "class_folder"
+                                })
         
-        if not class_dirs:
-            raise ValueError(f"No class directories found in: {self.data_path}")
-        
-        # Collect statistics
-        stats = {}
-        total = 0
-        min_count = float('inf')
-        max_count = 0
-        
-        for d in class_dirs:
-            try:
-                count = count_images(d, self.SUPPORTED_FORMATS)
-                if count > 0:
-                    stats[d.name] = count
-                    total += count
-                    min_count = min(min_count, count)
-                    max_count = max(max_count, count)
-            except PermissionError:
-                print(f"   ⚠️ Cannot access: {d}")
-                continue
-        
-        if total == 0:
-            raise ValueError(f"No images found in: {self.data_path}")
-        
-        # Calculate imbalance ratio
-        imbalance_ratio = max_count / min_count if min_count > 0 else float('inf')
-        
-        self.dataset_stats = {
-            "total": total,
-            "classes": len(stats),
-            "distribution": stats,
-            "min_samples": min_count,
-            "max_samples": max_count,
-            "imbalance_ratio": imbalance_ratio,
-            "avg_samples_per_class": total / len(stats) if len(stats) > 0 else 0
-        }
-        
-        # Print analysis
-        self._print_dataset_analysis()
-        
-        return self.dataset_stats
+        print(f"Total images collected: {len(self.all_images)}")
+        return self.all_images
     
-    def _print_dataset_analysis(self):
-        """Print formatted dataset analysis."""
-        stats = self.dataset_stats
+    def _find_image_for_xml(self, xml_path):
+        """Find the corresponding image for an XML annotation."""
+        img_name = xml_path.stem
         
-        print_section_header("📊 DATASET ANALYSIS")
-        print(f"📁 Path: {self.data_path}")
-        print(f"🖼️  Total images: {stats['total']}")
-        print(f"🏷️  Classes: {stats['classes']}")
-        print(f"📈 Avg per class: {stats['avg_samples_per_class']:.1f}")
-        print(f"⚖️  Imbalance ratio: {stats['imbalance_ratio']:.2f}")
-        print_subsection("Class Distribution:")
-        
-        for name, count in sorted(stats['distribution'].items()):
-            pct = count / stats['total'] * 100
-            bar_len = int(pct / 100 * 30)
-            bar = "█" * bar_len + "░" * (30 - bar_len)
-            print(f"  {name:20s} │ {bar} │ {count:4d} ({pct:5.1f}%)")
-        
-        print("=" * 60 + "\n")
-    
-    def compute_class_weights(self):
-        """Compute class weights to handle imbalanced data."""
-        class_dirs = sorted([
-            d for d in self.data_path.iterdir() 
-            if d.is_dir() and count_images(d, self.SUPPORTED_FORMATS) > 0
+        search_dirs = [self.images_dir] if self.images_dir else []
+        search_dirs.extend([
+            self.data_path,
+            self.data_path / "PCB_DATASET",
+            self.data_path / "PCB_DATASET" / "images",
         ])
-        self.class_names = [d.name for d in class_dirs]
         
-        # Build label array
-        labels = []
-        for idx, d in enumerate(class_dirs):
-            count = count_images(d, self.SUPPORTED_FORMATS)
-            labels.extend([idx] * count)
-        
-        # Compute balanced weights
-        weights = compute_class_weight(
-            'balanced', 
-            classes=np.unique(labels), 
-            y=labels
-        )
-        self.class_weights = dict(enumerate(weights))
-        
-        print("⚖️  Class weights (for imbalance correction):")
-        for idx, name in enumerate(self.class_names):
-            print(f"   {name}: {self.class_weights[idx]:.3f}")
-        print()
-        
-        return self.class_weights
-    
-    def create_generators(self):
-        """Create training and validation data generators with augmentation."""
-        
-        # Training augmentation - NO rescale, preprocess_input is in the model
-        train_datagen = ImageDataGenerator(
-            rotation_range=Config.ROTATION_RANGE,
-            width_shift_range=Config.WIDTH_SHIFT_RANGE,
-            height_shift_range=Config.HEIGHT_SHIFT_RANGE,
-            shear_range=Config.SHEAR_RANGE,
-            zoom_range=Config.ZOOM_RANGE,
-            horizontal_flip=Config.HORIZONTAL_FLIP,
-            vertical_flip=Config.VERTICAL_FLIP,
-            brightness_range=Config.BRIGHTNESS_RANGE,
-            fill_mode=Config.FILL_MODE,
-            validation_split=self.validation_split
-        )
-        
-        # Validation - no augmentation, no rescale
-        val_datagen = ImageDataGenerator(
-            validation_split=self.validation_split
-        )
-        
-        # Create generators
-        self.train_generator = train_datagen.flow_from_directory(
-            self.data_path,
-            target_size=self.img_size,
-            batch_size=self.batch_size,
-            class_mode='categorical',
-            subset='training',
-            shuffle=True,
-            seed=Config.RANDOM_SEED,
-            interpolation='bilinear'
-        )
-        
-        self.val_generator = val_datagen.flow_from_directory(
-            self.data_path,
-            target_size=self.img_size,
-            batch_size=self.batch_size,
-            class_mode='categorical',
-            subset='validation',
-            shuffle=False,
-            seed=Config.RANDOM_SEED,
-            interpolation='bilinear'
-        )
-        
-        # Update class info
-        self.class_names = list(self.train_generator.class_indices.keys())
-        self.num_classes = len(self.class_names)
-        
-        print("✅ Data generators created:")
-        print(f"   Training samples: {self.train_generator.samples}")
-        print(f"   Validation samples: {self.val_generator.samples}")
-        print(f"   Batch size: {self.batch_size}")
-        print(f"   Image size: {self.img_size}")
-        print(f"   Classes: {self.class_names}")
-        print()
-        
-        # CRITICAL: Check if we have any samples
-        if self.train_generator.samples == 0:
-            raise ValueError(
-                f"❌ CRITICAL ERROR: No training images found!\n"
-                f"   Data path: {self.data_path}\n"
-                f"   This usually means:\n"
-                f"   1. Dataset not added to Kaggle notebook\n"
-                f"   2. Wrong path to images\n"
-                f"   3. Images in unsupported format\n\n"
-                f"   👉 Solution: Add 'akhatova/pcb-defects' via '+ Add Input'"
-            )
-        
-        if self.val_generator.samples == 0:
-            raise ValueError(
-                f"❌ CRITICAL ERROR: No validation images found!\n"
-                f"   Data path: {self.data_path}\n"
-                f"   Training samples: {self.train_generator.samples}"
-            )
-        
-        return self.train_generator, self.val_generator
-    
-    def get_steps(self):
-        """Return steps per epoch for train and validation."""
-        from src.utils import calculate_steps_per_epoch
-        train_steps = calculate_steps_per_epoch(self.train_generator.samples, self.batch_size)
-        val_steps = calculate_steps_per_epoch(self.val_generator.samples, self.batch_size)
-        return train_steps, val_steps
-    
-    def get_sample_batch(self):
-        """Get a sample batch for visualization."""
-        self.train_generator.reset()
-        images, labels = next(self.train_generator)
-        return images, labels
-    
-    def get_class_indices(self):
-        """Return mapping of class names to indices."""
-        return self.train_generator.class_indices
-    
-    def visualize_augmentation(self, num_samples=5):
-        """Visualize augmentation effects on sample images."""
-        import matplotlib.pyplot as plt
-        from src.utils import get_all_images
-        
-        # Get one image per class
-        fig, axes = plt.subplots(self.num_classes, num_samples + 1, 
-                                  figsize=(3 * (num_samples + 1), 3 * self.num_classes))
-        
-        for class_idx, class_name in enumerate(self.class_names):
-            class_dir = self.data_path / class_name
-            images = get_all_images(class_dir, self.SUPPORTED_FORMATS)
-            
-            if not images:
+        for search_dir in search_dirs:
+            if not search_dir or not search_dir.exists():
                 continue
+            
+            for ext in [".jpg", ".JPG", ".png", ".PNG"]:
+                # Direct path
+                candidate = search_dir / (img_name + ext)
+                if candidate.exists():
+                    return candidate
                 
-            # Load original image
-            img = tf.keras.preprocessing.image.load_img(
-                images[0], target_size=self.img_size
-            )
-            img_array = tf.keras.preprocessing.image.img_to_array(img)
-            
-            # Show original
-            axes[class_idx, 0].imshow(img_array.astype('uint8'))
-            axes[class_idx, 0].set_title(f'{class_name}\n(Original)')
-            axes[class_idx, 0].axis('off')
-            
-            # Show augmented versions
-            datagen = ImageDataGenerator(
-                rotation_range=Config.ROTATION_RANGE,
-                width_shift_range=Config.WIDTH_SHIFT_RANGE,
-                height_shift_range=Config.HEIGHT_SHIFT_RANGE,
-                zoom_range=Config.ZOOM_RANGE,
-                horizontal_flip=Config.HORIZONTAL_FLIP,
-                vertical_flip=Config.VERTICAL_FLIP,
-                brightness_range=Config.BRIGHTNESS_RANGE,
-                fill_mode=Config.FILL_MODE
-            )
-            
-            img_batch = np.expand_dims(img_array, 0)
-            aug_iter = datagen.flow(img_batch, batch_size=1)
-            
-            for i in range(num_samples):
-                aug_img = next(aug_iter)[0].astype('uint8')
-                axes[class_idx, i + 1].imshow(aug_img)
-                axes[class_idx, i + 1].set_title(f'Aug {i + 1}')
-                axes[class_idx, i + 1].axis('off')
+                # In class subfolders
+                for cls_name in Config.CLASS_MAP.keys():
+                    candidate = search_dir / cls_name / (img_name + ext)
+                    if candidate.exists():
+                        return candidate
         
-        plt.suptitle('Data Augmentation Preview', fontsize=14, fontweight='bold')
-        plt.tight_layout()
+        return None
+    
+    def convert_voc_to_yolo(self, xml_path, img_width, img_height):
+        """Convert VOC XML annotation to YOLO format."""
+        tree = ET.parse(xml_path)
+        root = tree.getroot()
         
-        output_path = Config.get_output_path() / 'augmentation_preview.png'
-        plt.savefig(output_path, dpi=150, bbox_inches='tight')
-        plt.show()
-        plt.close()
+        yolo_lines = []
+        for obj in root.findall("object"):
+            class_name = obj.find("name").text
+            if class_name not in Config.CLASS_MAP:
+                continue
+            
+            class_id = Config.CLASS_MAP[class_name]
+            bbox = obj.find("bndbox")
+            
+            xmin = float(bbox.find("xmin").text)
+            ymin = float(bbox.find("ymin").text)
+            xmax = float(bbox.find("xmax").text)
+            ymax = float(bbox.find("ymax").text)
+            
+            # Clamp values
+            xmin = max(0, min(xmin, img_width))
+            xmax = max(0, min(xmax, img_width))
+            ymin = max(0, min(ymin, img_height))
+            ymax = max(0, min(ymax, img_height))
+            
+            # Convert to YOLO format (normalized center_x, center_y, width, height)
+            x_center = (xmin + xmax) / 2 / img_width
+            y_center = (ymin + ymax) / 2 / img_height
+            width = (xmax - xmin) / img_width
+            height = (ymax - ymin) / img_height
+            
+            if width > 0 and height > 0:
+                yolo_lines.append(f"{class_id} {x_center:.6f} {y_center:.6f} {width:.6f} {height:.6f}")
         
-        print(f"📸 Augmentation preview saved to: {output_path}")
+        return yolo_lines
+    
+    def create_yolo_dataset(self):
+        """Create YOLO formatted dataset."""
+        print("\nCreating YOLO dataset structure...")
+        
+        # Create directories
+        for split in ["train", "val"]:
+            (self.yolo_path / "images" / split).mkdir(parents=True, exist_ok=True)
+            (self.yolo_path / "labels" / split).mkdir(parents=True, exist_ok=True)
+        
+        # Shuffle and split
+        random.seed(Config.RANDOM_SEED)
+        random.shuffle(self.all_images)
+        
+        split_idx = int(len(self.all_images) * (1 - Config.VAL_SPLIT))
+        train_images = self.all_images[:split_idx]
+        val_images = self.all_images[split_idx:]
+        
+        print(f"Train: {len(train_images)}, Val: {len(val_images)}")
+        
+        # Process images
+        train_count = self._process_split(train_images, "train")
+        val_count = self._process_split(val_images, "val")
+        
+        print(f"Processed - Train: {train_count}, Val: {val_count}")
+        
+        # Create YAML config
+        self._create_yaml_config()
+        
+        return train_count, val_count
+    
+    def _process_split(self, image_list, split):
+        """Process images for a split (train/val)."""
+        count = 0
+        
+        for item in image_list:
+            img_path = item["image"]
+            
+            try:
+                img = Image.open(img_path)
+                img_width, img_height = img.size
+            except Exception as e:
+                print(f"Error reading {img_path}: {e}")
+                continue
+            
+            # Copy image
+            dst_img = self.yolo_path / "images" / split / img_path.name
+            shutil.copy(img_path, dst_img)
+            
+            # Create label
+            label_path = self.yolo_path / "labels" / split / (img_path.stem + ".txt")
+            
+            if item["type"] == "xml":
+                yolo_lines = self.convert_voc_to_yolo(item["annotation"], img_width, img_height)
+                with open(label_path, "w") as f:
+                    f.write("\n".join(yolo_lines))
+            else:
+                # Class folder - use full image as bounding box
+                cls_name = item["class"]
+                cls_id = Config.CLASS_MAP.get(cls_name, 0)
+                with open(label_path, "w") as f:
+                    f.write(f"{cls_id} 0.5 0.5 1.0 1.0")
+            
+            count += 1
+        
+        return count
+    
+    def _create_yaml_config(self):
+        """Create YOLO dataset YAML configuration."""
+        yaml_content = f"""path: {self.yolo_path}
+train: images/train
+val: images/val
+
+names:
+  0: missing_hole
+  1: mouse_bite
+  2: open_circuit
+  3: short
+  4: spur
+  5: spurious_copper
+
+nc: {Config.NUM_CLASSES}
+"""
+        yaml_path = self.yolo_path / "dataset.yaml"
+        with open(yaml_path, "w") as f:
+            f.write(yaml_content)
+        
+        print(f"Dataset config saved: {yaml_path}")
+        return yaml_path
+    
+    def get_yaml_path(self):
+        """Return path to dataset YAML config."""
+        return self.yolo_path / "dataset.yaml"
+    
+    def get_stats(self):
+        """Return dataset statistics."""
+        stats = {
+            "total_images": len(self.all_images),
+            "with_xml": sum(1 for item in self.all_images if item["type"] == "xml"),
+            "from_folders": sum(1 for item in self.all_images if item["type"] == "class_folder"),
+        }
+        return stats
