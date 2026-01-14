@@ -10,7 +10,7 @@ class Config:
     # Dataset
     KAGGLE_DATASET = "akhatova/pcb-defects"
     
-    # Classes de défauts - supporte les deux formats de noms
+    # Classes de défauts - format standard (lowercase avec underscore)
     DEFECT_CLASSES = [
         "missing_hole",
         "mouse_bite", 
@@ -20,14 +20,16 @@ class Config:
         "spurious_copper"
     ]
     
-    # Noms alternatifs utilisés dans certains datasets
+    # Tous les noms possibles (lowercase, CamelCase, alternatives)
     DEFECT_CLASSES_ALT = [
-        "missing_hole", "pin_hole",
-        "mouse_bite", "mousebite",
-        "open_circuit", "open",
-        "short",
-        "spur",
-        "spurious_copper"
+        # Standard lowercase
+        "missing_hole", "mouse_bite", "open_circuit", "short", "spur", "spurious_copper",
+        # CamelCase (Kaggle akhatova/pcb-defects)
+        "Missing_hole", "Mouse_bite", "Open_circuit", "Short", "Spur", "Spurious_copper",
+        # Alternatives
+        "pin_hole", "mousebite", "open",
+        # Uppercase
+        "MISSING_HOLE", "MOUSE_BITE", "OPEN_CIRCUIT", "SHORT", "SPUR", "SPURIOUS_COPPER",
     ]
     
     NUM_CLASSES = 6

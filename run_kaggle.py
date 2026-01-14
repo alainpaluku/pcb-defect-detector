@@ -76,10 +76,27 @@ print("\n📁 Searching for dataset...")
 
 def find_pcb_dataset():
     """Find PCB dataset with class folders."""
-    # All possible class names (standard + alternatives)
+    # All possible class names (standard + CamelCase + alternatives)
     all_classes = list(set(Config.DEFECT_CLASSES + Config.DEFECT_CLASSES_ALT))
     
-    # First, explore the structure
+    # Chemins spécifiques connus pour ce dataset
+    known_paths = [
+        "/kaggle/input/pcb-defects/PCB_DATASET/images",
+        "/kaggle/input/pcb-defects/PCB_DATASET",
+        "/kaggle/input/pcb-defects",
+    ]
+    
+    # Vérifier d'abord les chemins connus
+    for path_str in known_paths:
+        path = Path(path_str)
+        if path.exists():
+            classes_found = [c for c in all_classes if (path / c).exists()]
+            if len(classes_found) >= 3:
+                print(f"   ✅ Found dataset at: {path}")
+                print(f"      Classes: {classes_found}")
+                return path
+    
+    # Si pas trouvé, explorer la structure
     kaggle_input = Path("/kaggle/input")
     if kaggle_input.exists():
         print("\n   🔍 Exploring /kaggle/input structure:")
@@ -88,20 +105,16 @@ def find_pcb_dataset():
                 print(f"      📂 {dataset_dir.name}/")
                 explore_dir(dataset_dir, depth=0, max_depth=4, all_classes=all_classes)
     
-    # Now search for class folders
+    # Recherche récursive
     search_paths = []
-    
-    # Build search paths dynamically
     if kaggle_input.exists():
         for dataset_dir in kaggle_input.iterdir():
             if dataset_dir.is_dir():
-                # Add all possible paths
                 search_paths.append(dataset_dir)
                 for root, dirs, files in os.walk(dataset_dir):
                     for d in dirs:
                         search_paths.append(Path(root) / d)
     
-    # Search each path for class folders
     print(f"\n   🔍 Searching {len(search_paths)} directories for class folders...")
     
     for path in search_paths:
