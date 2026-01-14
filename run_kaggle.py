@@ -167,10 +167,21 @@ trainer.save_model()
 print("\n" + "=" * 60)
 print("TRAINING COMPLETE!")
 print("=" * 60)
-acc = metrics.get('accuracy', 0)
-prec = metrics.get('precision', 0)
-rec = metrics.get('recall', 0)
-f1 = metrics.get('f1_score', 0)
+
+# Afficher les metriques depuis l'historique si metrics vide
+if metrics.get('accuracy', 0) == 0 and trainer.history:
+    # Prendre les dernieres valeurs de l'historique
+    hist = trainer.history.history
+    acc = hist.get('val_accuracy', [0])[-1] if 'val_accuracy' in hist else 0
+    prec = hist.get('val_precision', [0])[-1] if 'val_precision' in hist else 0
+    rec = hist.get('val_recall', [0])[-1] if 'val_recall' in hist else 0
+    f1 = 2 * (prec * rec) / (prec + rec + 1e-7)
+else:
+    acc = metrics.get('accuracy', 0)
+    prec = metrics.get('precision', 0)
+    rec = metrics.get('recall', 0)
+    f1 = metrics.get('f1_score', 0)
+
 print(f"\nResults:")
 print(f"   Accuracy:  {acc:.2%}")
 print(f"   Precision: {prec:.4f}")

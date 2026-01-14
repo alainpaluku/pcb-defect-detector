@@ -196,6 +196,9 @@ class TrainingManager:
         """Evaluate model and return metrics."""
         print_section_header("📊 EVALUATION")
         
+        # Reset generator before evaluation
+        self.data.val_generator.reset()
+        
         # Evaluate on validation set
         results = self.model.model.evaluate(
             self.data.val_generator,
