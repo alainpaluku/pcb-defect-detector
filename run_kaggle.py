@@ -55,6 +55,7 @@ except OSError:
 
 from src.config import Config
 from src.trainer import TrainingManager
+from pathlib import Path
 
 # ============================================================
 # 3. VERIFY ENVIRONMENT
@@ -69,66 +70,91 @@ for gpu in gpus:
 print(f"   Environment: {'Kaggle' if Config.is_kaggle() else 'Local'}")
 
 # ============================================================
-# 4. VERIFY DATASET
+# 4. FIND DATASET (Kaggle-specific search)
 # ============================================================
-print("\n📁 Checking dataset...")
+print("\n📁 Searching for dataset...")
 
+def find_pcb_dataset():
+    """Find PCB dataset with class folders."""
+    defect_classes = Config.DEFECT_CLASSES
+    
+    # Kaggle paths to search
+    search_paths = [
+        "/kaggle/input/pcb-defects/PCB_DATASET/images",
+        "/kaggle/input/pcb-defects/PCB_DATASET",
+        "/kaggle/input/pcb-defects/images",
+        "/kaggle/input/pcb-defects",
+        "/kaggle/input/pcbdefects/PCB_DATASET/images",
+        "/kaggle/input/pcbdefects/PCB_DATASET",
+        "/kaggle/input/pcbdefects",
+    ]
+    
+    # Also search all subdirectories in /kaggle/input
+    kaggle_input = Path("/kaggle/input")
+    if kaggle_input.exists():
+        for dataset_dir in kaggle_input.iterdir():
+            if dataset_dir.is_dir():
+                # Add dataset root
+                search_paths.append(str(dataset_dir))
+                # Add common subdirs
+                for subdir in ["PCB_DATASET", "images", "PCB_DATASET/images", "data"]:
+                    search_paths.append(str(dataset_dir / subdir))
+    
+    # Search each path
+    for path_str in search_paths:
+        path = Path(path_str)
+        if path.exists():
+            # Check if this path has class folders
+            classes_found = [c for c in defect_classes if (path / c).exists()]
+            if len(classes_found) >= 3:  # At least 3 classes
+                print(f"   ✅ Found dataset at: {path}")
+                print(f"      Classes: {classes_found}")
+                return path
+    
+    return None
+
+# Show what's in /kaggle/input
 if Config.is_kaggle():
-    kaggle_input = "/kaggle/input"
-    if os.path.exists(kaggle_input):
-        datasets = os.listdir(kaggle_input)
-        print(f"   Found {len(datasets)} dataset(s) in /kaggle/input:")
-        for ds in datasets:
-            print(f"      - {ds}")
-            ds_path = os.path.join(kaggle_input, ds)
-            if os.path.isdir(ds_path):
-                contents = os.listdir(ds_path)[:5]
-                for c in contents:
-                    print(f"         └── {c}")
-    else:
-        print("   ⚠️  /kaggle/input not found!")
-        print("   Please add dataset 'akhatova/pcb-defects' to your notebook")
-        sys.exit(1)
+    kaggle_input = Path("/kaggle/input")
+    if kaggle_input.exists():
+        print(f"   Contents of /kaggle/input:")
+        for item in kaggle_input.iterdir():
+            print(f"      📂 {item.name}/")
+            if item.is_dir():
+                for subitem in list(item.iterdir())[:5]:
+                    print(f"         └── {subitem.name}")
 
-# Force correct path detection for Kaggle
-from pathlib import Path
-possible_paths = [
-    Path("/kaggle/input/pcb-defects/PCB_DATASET"),
-    Path("/kaggle/input/pcb-defects"),
-    Path("/kaggle/input/pcbdefects/PCB_DATASET"),
-    Path("/kaggle/input/pcbdefects"),
-]
-
-data_path = None
-for p in possible_paths:
-    if p.exists() and any((p / c).exists() for c in Config.DEFECT_CLASSES):
-        data_path = p
-        break
+# Find the dataset
+data_path = find_pcb_dataset()
 
 if data_path is None:
+    # Fallback to Config
     data_path = Config.get_data_path()
+    if not data_path.exists():
+        print(f"\n❌ ERROR: Dataset not found!")
+        print("\n👉 Please add the dataset 'akhatova/pcb-defects' to your Kaggle notebook:")
+        print("   1. Click '+ Add Input' on the right panel")
+        print("   2. Search for 'akhatova/pcb-defects'")
+        print("   3. Click 'Add' to add it")
+        print("   4. Re-run this script")
+        sys.exit(1)
 
-print(f"\n   Data path: {data_path}")
+print(f"\n   📁 Using data path: {data_path}")
 
-if not data_path or not data_path.exists():
-    print(f"\n❌ ERROR: Dataset not found at {data_path}")
-    print("\n👉 Please add the dataset 'akhatova/pcb-defects' to your Kaggle notebook:")
-    print("   1. Click '+ Add Input' on the right panel")
-    print("   2. Search for 'akhatova/pcb-defects'")
-    print("   3. Click 'Add' to add it")
-    print("   4. Re-run this script")
-    sys.exit(1)
-
-# Check for class folders
+# Verify classes
 classes_found = [c for c in Config.DEFECT_CLASSES if (data_path / c).exists()]
 print(f"   Classes found: {len(classes_found)}/{len(Config.DEFECT_CLASSES)}")
+for cls in classes_found:
+    count = len(list((data_path / cls).glob("*")))
+    print(f"      - {cls}: {count} images")
 
 if len(classes_found) == 0:
     print(f"\n❌ ERROR: No class folders found in {data_path}")
+    print(f"   Expected folders: {Config.DEFECT_CLASSES}")
     sys.exit(1)
 
 # ============================================================
-# 5. RUN TRAINING (with correct data path)
+# 5. RUN TRAINING
 # ============================================================
 print("\n" + "=" * 60)
 print("🏋️ STARTING TRAINING PIPELINE")
@@ -136,7 +162,6 @@ print("=" * 60)
 
 # Initialize and run with explicit data path
 from src.data_ingestion import DataIngestion
-from src.model import PCBClassifier
 
 trainer = TrainingManager()
 trainer.data = DataIngestion(data_path=data_path)
