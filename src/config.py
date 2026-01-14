@@ -111,6 +111,23 @@ class Config:
         if Config.is_kaggle():
             kaggle_input = Path("/kaggle/input")
             
+            # Chemins connus en priorité
+            known_paths = [
+                "/kaggle/input/pcb-defects/PCB_DATASET/images",
+                "/kaggle/input/pcb-defects/PCB_DATASET",
+                "/kaggle/input/pcb-defects/images",
+                "/kaggle/input/pcb-defects",
+                "/kaggle/input/pcbdefects/PCB_DATASET/images",
+                "/kaggle/input/pcbdefects/PCB_DATASET",
+                "/kaggle/input/pcbdefects",
+            ]
+            
+            for p in known_paths:
+                path = Path(p)
+                if path.exists() and Config._has_class_folders(path):
+                    print(f"📁 Dataset found: {path}")
+                    return path
+            
             # Search all datasets and subdirectories
             if kaggle_input.exists():
                 for dataset_folder in kaggle_input.iterdir():
@@ -121,28 +138,22 @@ class Config:
                             return dataset_folder
                         
                         # Check all subdirectories (PCB_DATASET, images, etc.)
-                        for subdir in dataset_folder.iterdir():
-                            if subdir.is_dir():
-                                if Config._has_class_folders(subdir):
-                                    print(f"📁 Dataset found: {subdir}")
-                                    return subdir
-                                # One more level deep
-                                for subsubdir in subdir.iterdir():
-                                    if subsubdir.is_dir() and Config._has_class_folders(subsubdir):
-                                        print(f"📁 Dataset found: {subsubdir}")
-                                        return subsubdir
-            
-            # Fallback: try common paths
-            common_paths = [
-                "/kaggle/input/pcb-defects/PCB_DATASET",
-                "/kaggle/input/pcb-defects",
-                "/kaggle/input/pcbdefects", 
-            ]
-            for p in common_paths:
-                path = Path(p)
-                if path.exists() and Config._has_class_folders(path):
-                    print(f"📁 Dataset found: {path}")
-                    return path
+                        try:
+                            for subdir in dataset_folder.iterdir():
+                                if subdir.is_dir():
+                                    if Config._has_class_folders(subdir):
+                                        print(f"📁 Dataset found: {subdir}")
+                                        return subdir
+                                    # One more level deep
+                                    try:
+                                        for subsubdir in subdir.iterdir():
+                                            if subsubdir.is_dir() and Config._has_class_folders(subsubdir):
+                                                print(f"📁 Dataset found: {subsubdir}")
+                                                return subsubdir
+                                    except PermissionError:
+                                        pass
+                        except PermissionError:
+                            pass
         
         # Local
         local_paths = [

@@ -1,6 +1,8 @@
 """Training manager for PCB Defect Detection."""
 
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Non-interactive backend
 import matplotlib.pyplot as plt
 import seaborn as sns
 import tensorflow as tf
@@ -12,6 +14,16 @@ from src.config import Config
 from src.data_ingestion import DataIngestion
 from src.model import PCBClassifier
 from src.utils import print_section_header, print_subsection, format_bytes
+
+# Set matplotlib style - compatible avec toutes les versions
+available_styles = plt.style.available
+for style in ['seaborn-v0_8-whitegrid', 'seaborn-whitegrid', 'ggplot', 'default']:
+    if style in available_styles or style == 'default':
+        try:
+            plt.style.use(style)
+            break
+        except OSError:
+            continue
 
 
 class TrainingManager:

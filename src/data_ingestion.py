@@ -37,10 +37,14 @@ class DataIngestion:
             return self.data_path
         
         # Search common subdirectories
-        for subdir in ["", "images", "PCB_DATASET/images", "PCB_DATASET", "data"]:
+        subdirs_to_check = ["", "images", "PCB_DATASET/images", "PCB_DATASET", "data", "train", "Images"]
+        for subdir in subdirs_to_check:
             candidate = self.data_path / subdir if subdir else self.data_path
-            if candidate.exists() and Config._has_class_folders(candidate):
-                return candidate
+            try:
+                if candidate.exists() and Config._has_class_folders(candidate):
+                    return candidate
+            except PermissionError:
+                continue
         
         return self.data_path
     
@@ -52,10 +56,13 @@ class DataIngestion:
             raise FileNotFoundError(f"Dataset not found: {self.data_path}")
         
         # Get class directories
-        class_dirs = sorted([
-            d for d in self.data_path.iterdir() 
-            if d.is_dir() and not d.name.startswith('.')
-        ])
+        try:
+            class_dirs = sorted([
+                d for d in self.data_path.iterdir() 
+                if d.is_dir() and not d.name.startswith('.')
+            ])
+        except PermissionError as e:
+            raise PermissionError(f"Cannot access dataset directory: {self.data_path}") from e
         
         if not class_dirs:
             raise ValueError(f"No class directories found in: {self.data_path}")
@@ -67,12 +74,16 @@ class DataIngestion:
         max_count = 0
         
         for d in class_dirs:
-            count = count_images(d, self.SUPPORTED_FORMATS)
-            if count > 0:
-                stats[d.name] = count
-                total += count
-                min_count = min(min_count, count)
-                max_count = max(max_count, count)
+            try:
+                count = count_images(d, self.SUPPORTED_FORMATS)
+                if count > 0:
+                    stats[d.name] = count
+                    total += count
+                    min_count = min(min_count, count)
+                    max_count = max(max_count, count)
+            except PermissionError:
+                print(f"   ⚠️ Cannot access: {d}")
+                continue
         
         if total == 0:
             raise ValueError(f"No images found in: {self.data_path}")
@@ -87,7 +98,7 @@ class DataIngestion:
             "min_samples": min_count,
             "max_samples": max_count,
             "imbalance_ratio": imbalance_ratio,
-            "avg_samples_per_class": total / len(stats)
+            "avg_samples_per_class": total / len(stats) if len(stats) > 0 else 0
         }
         
         # Print analysis
