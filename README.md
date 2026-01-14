@@ -42,7 +42,11 @@ Système de détection automatique de défauts sur circuits imprimés (PCB) util
 !python run_kaggle.py
 ```
 
-> ⚠️ **Prérequis** : Ajouter le dataset `akhatova/pcb-defects` et activer le GPU
+> ⚠️ **Prérequis OBLIGATOIRES** : 
+> 1. Ajouter le dataset `akhatova/pcb-defects` via **"+ Add Input"**
+> 2. Activer le **GPU** dans les paramètres du notebook
+> 
+> 📖 **[Guide complet Kaggle](KAGGLE_SETUP.md)** - Instructions détaillées et dépannage
 
 ### Option 2 : Local
 
