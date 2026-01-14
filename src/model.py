@@ -46,8 +46,10 @@ class PCBClassifier:
         # Build classification head
         inputs = layers.Input(shape=(*self.img_size, 3), name='input_image')
         
-        # MobileNetV2 preprocessing
-        x = tf.keras.applications.mobilenet_v2.preprocess_input(inputs)
+        # Rescale from [0,1] to [0,255] then apply MobileNetV2 preprocessing
+        # Because ImageDataGenerator already rescales to [0,1]
+        x = layers.Rescaling(255.0)(inputs)
+        x = tf.keras.applications.mobilenet_v2.preprocess_input(x)
         
         # Feature extraction
         x = self.base_model(x, training=False)

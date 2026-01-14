@@ -1,6 +1,6 @@
 # PCB Defect Detection
 
-Deep Learning pour l'Inspection Optique Automatisée des Circuits Imprimés avec **MobileNetV2**.
+A CNN-based Computer Vision solution for automated quality control of Printed Circuit Boards (PCBs) using **MobileNetV2** transfer learning.
 
 [![Kaggle](https://img.shields.io/badge/Kaggle-Dataset-20BEFF?style=flat-square&logo=kaggle)](https://www.kaggle.com/datasets/akhatova/pcb-defects)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python)](https://python.org)
