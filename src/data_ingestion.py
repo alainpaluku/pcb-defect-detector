@@ -158,9 +158,8 @@ class DataIngestion:
     def create_generators(self):
         """Create training and validation data generators with augmentation."""
         
-        # Training augmentation - optimized for PCB images
+        # Training augmentation - NO rescale, preprocess_input is in the model
         train_datagen = ImageDataGenerator(
-            rescale=1./255,
             rotation_range=Config.ROTATION_RANGE,
             width_shift_range=Config.WIDTH_SHIFT_RANGE,
             height_shift_range=Config.HEIGHT_SHIFT_RANGE,
@@ -173,9 +172,8 @@ class DataIngestion:
             validation_split=self.validation_split
         )
         
-        # Validation - no augmentation, only rescale
+        # Validation - no augmentation, no rescale
         val_datagen = ImageDataGenerator(
-            rescale=1./255,
             validation_split=self.validation_split
         )
         

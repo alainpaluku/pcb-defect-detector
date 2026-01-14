@@ -22,7 +22,7 @@ class PCBClassifier:
         self.model = None
         self.base_model = None
         
-    def build_model(self, dropout_rate=0.5, l2_reg=0.01):
+    def build_model(self, dropout_rate=0.3, l2_reg=0.001):
         """Build MobileNetV2-based classification model.
         
         Args:
@@ -37,7 +37,7 @@ class PCBClassifier:
             input_shape=(*self.img_size, 3),
             include_top=False,
             weights='imagenet',
-            alpha=1.0  # Width multiplier
+            alpha=1.0
         )
         
         # Freeze base model initially
@@ -46,10 +46,8 @@ class PCBClassifier:
         # Build classification head
         inputs = layers.Input(shape=(*self.img_size, 3), name='input_image')
         
-        # Rescale from [0,1] to [0,255] then apply MobileNetV2 preprocessing
-        # Because ImageDataGenerator already rescales to [0,1]
-        x = layers.Rescaling(255.0)(inputs)
-        x = tf.keras.applications.mobilenet_v2.preprocess_input(x)
+        # MobileNetV2 preprocessing (expects [0, 255], outputs [-1, 1])
+        x = tf.keras.applications.mobilenet_v2.preprocess_input(inputs)
         
         # Feature extraction
         x = self.base_model(x, training=False)
@@ -57,25 +55,14 @@ class PCBClassifier:
         # Global pooling
         x = layers.GlobalAveragePooling2D(name='global_pool')(x)
         
-        # Batch normalization
-        x = layers.BatchNormalization(name='bn_head')(x)
-        
-        # Dense layers with stronger regularization to reduce overfitting
+        # Simple head - less regularization
         x = layers.Dense(
-            128,  # Réduit de 256 à 128
+            256,
             activation='relu',
             kernel_regularizer=regularizers.l2(l2_reg),
             name='dense_1'
         )(x)
         x = layers.Dropout(dropout_rate, name='dropout_1')(x)
-        
-        x = layers.Dense(
-            64,  # Réduit de 128 à 64
-            activation='relu',
-            kernel_regularizer=regularizers.l2(l2_reg),
-            name='dense_2'
-        )(x)
-        x = layers.Dropout(dropout_rate * 0.8, name='dropout_2')(x)  # Plus de dropout
         
         # Output layer
         outputs = layers.Dense(
@@ -179,12 +166,12 @@ class PCBClassifier:
         Returns:
             dict with prediction results
         """
-        # Load and preprocess image
+        # Load and preprocess image (no rescale, preprocess_input is in model)
         img = tf.keras.preprocessing.image.load_img(
             image_path, target_size=self.img_size
         )
         img_array = tf.keras.preprocessing.image.img_to_array(img)
-        img_array = np.expand_dims(img_array, 0) / 255.0
+        img_array = np.expand_dims(img_array, 0)  # Keep [0, 255] range
         
         # Predict
         predictions = self.model.predict(img_array, verbose=0)[0]

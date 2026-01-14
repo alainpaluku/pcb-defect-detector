@@ -37,33 +37,33 @@ class Config:
     # Model
     IMG_SIZE = (224, 224)
     BATCH_SIZE = 32
-    EPOCHS = 30  # Réduit pour éviter overfitting
-    LEARNING_RATE = 0.0001  # Lower LR for transfer learning
+    EPOCHS = 20
+    LEARNING_RATE = 0.001  # Plus haut pour transfer learning
     VALIDATION_SPLIT = 0.2
-    TEST_SPLIT = 0.1  # Hold-out test set
+    TEST_SPLIT = 0.1
     RANDOM_SEED = 42
     
-    # Augmentation - Plus agressif pour réduire overfitting
-    ROTATION_RANGE = 30  # Augmenté
-    WIDTH_SHIFT_RANGE = 0.2  # Augmenté
-    HEIGHT_SHIFT_RANGE = 0.2  # Augmenté
-    ZOOM_RANGE = 0.2  # Augmenté
+    # Augmentation - Modéré
+    ROTATION_RANGE = 20
+    WIDTH_SHIFT_RANGE = 0.1
+    HEIGHT_SHIFT_RANGE = 0.1
+    ZOOM_RANGE = 0.1
     HORIZONTAL_FLIP = True
     VERTICAL_FLIP = True
-    BRIGHTNESS_RANGE = (0.8, 1.2)  # Plus de variation
-    SHEAR_RANGE = 0.1  # Augmenté
-    FILL_MODE = 'reflect'  # Meilleur pour PCB que 'nearest'
+    BRIGHTNESS_RANGE = (0.9, 1.1)
+    SHEAR_RANGE = 0.05
+    FILL_MODE = 'nearest'
     
-    # Training callbacks - Early stopping plus agressif
-    EARLY_STOPPING_PATIENCE = 8  # Réduit pour arrêter plus tôt
-    REDUCE_LR_PATIENCE = 3  # Réduit
+    # Training callbacks
+    EARLY_STOPPING_PATIENCE = 10
+    REDUCE_LR_PATIENCE = 5
     REDUCE_LR_FACTOR = 0.5
     MIN_LEARNING_RATE = 1e-7
     
-    # Fine-tuning - Moins de layers pour éviter overfitting
-    FINE_TUNE_EPOCHS = 15  # Réduit
-    FINE_TUNE_LAYERS = 30  # Réduit - moins de couches débloquées
-    FINE_TUNE_LR = 1e-5
+    # Fine-tuning
+    FINE_TUNE_EPOCHS = 10
+    FINE_TUNE_LAYERS = 50
+    FINE_TUNE_LR = 1e-4
     
     @staticmethod
     def is_kaggle():
