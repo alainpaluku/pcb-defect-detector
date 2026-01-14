@@ -76,7 +76,8 @@ print("\n📁 Searching for dataset...")
 
 def find_pcb_dataset():
     """Find PCB dataset with class folders."""
-    defect_classes = Config.DEFECT_CLASSES
+    # All possible class names (standard + alternatives)
+    all_classes = list(set(Config.DEFECT_CLASSES + Config.DEFECT_CLASSES_ALT))
     
     # First, explore the structure
     kaggle_input = Path("/kaggle/input")
@@ -85,7 +86,7 @@ def find_pcb_dataset():
         for dataset_dir in kaggle_input.iterdir():
             if dataset_dir.is_dir():
                 print(f"      📂 {dataset_dir.name}/")
-                explore_dir(dataset_dir, depth=0, max_depth=4)
+                explore_dir(dataset_dir, depth=0, max_depth=4, all_classes=all_classes)
     
     # Now search for class folders
     search_paths = []
@@ -105,7 +106,7 @@ def find_pcb_dataset():
     
     for path in search_paths:
         if path.exists():
-            classes_found = [c for c in defect_classes if (path / c).exists()]
+            classes_found = [c for c in all_classes if (path / c).exists()]
             if len(classes_found) >= 3:
                 print(f"   ✅ Found dataset at: {path}")
                 print(f"      Classes: {classes_found}")
@@ -113,10 +114,12 @@ def find_pcb_dataset():
     
     return None
 
-def explore_dir(path, depth=0, max_depth=3):
+def explore_dir(path, depth=0, max_depth=3, all_classes=None):
     """Recursively explore directory structure."""
     if depth >= max_depth:
         return
+    if all_classes is None:
+        all_classes = Config.DEFECT_CLASSES
     
     indent = "      " + "   " * depth
     try:
@@ -124,10 +127,10 @@ def explore_dir(path, depth=0, max_depth=3):
         for item in items:
             if item.is_dir():
                 # Check if it's a class folder
-                is_class = item.name in Config.DEFECT_CLASSES
+                is_class = item.name in all_classes
                 marker = "🏷️ " if is_class else "📁 "
                 print(f"{indent}└── {marker}{item.name}/")
-                explore_dir(item, depth + 1, max_depth)
+                explore_dir(item, depth + 1, max_depth, all_classes)
             else:
                 if depth < 2:  # Only show files at shallow depths
                     print(f"{indent}└── 📄 {item.name}")

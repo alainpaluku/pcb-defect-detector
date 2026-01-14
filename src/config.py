@@ -9,6 +9,8 @@ class Config:
     
     # Dataset
     KAGGLE_DATASET = "akhatova/pcb-defects"
+    
+    # Classes de défauts - supporte les deux formats de noms
     DEFECT_CLASSES = [
         "missing_hole",
         "mouse_bite", 
@@ -17,6 +19,17 @@ class Config:
         "spur",
         "spurious_copper"
     ]
+    
+    # Noms alternatifs utilisés dans certains datasets
+    DEFECT_CLASSES_ALT = [
+        "missing_hole", "pin_hole",
+        "mouse_bite", "mousebite",
+        "open_circuit", "open",
+        "short",
+        "spur",
+        "spurious_copper"
+    ]
+    
     NUM_CLASSES = 6
     
     # Model
@@ -57,11 +70,14 @@ class Config:
     
     @staticmethod
     def _has_class_folders(path):
-        """Check if path contains class folders."""
+        """Check if path contains class folders (supports both naming conventions)."""
         path = Path(path)
         if not path.exists():
             return False
-        return any((path / cls).exists() for cls in Config.DEFECT_CLASSES)
+        
+        # Check both standard and alternative class names
+        all_possible_classes = set(Config.DEFECT_CLASSES + Config.DEFECT_CLASSES_ALT)
+        return any((path / cls).exists() for cls in all_possible_classes)
     
     @staticmethod
     def _find_data_in_path(base_path):
