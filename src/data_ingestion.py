@@ -203,6 +203,25 @@ class DataIngestion:
         print(f"   Classes: {self.class_names}")
         print()
         
+        # CRITICAL: Check if we have any samples
+        if self.train_generator.samples == 0:
+            raise ValueError(
+                f"❌ CRITICAL ERROR: No training images found!\n"
+                f"   Data path: {self.data_path}\n"
+                f"   This usually means:\n"
+                f"   1. Dataset not added to Kaggle notebook\n"
+                f"   2. Wrong path to images\n"
+                f"   3. Images in unsupported format\n\n"
+                f"   👉 Solution: Add 'akhatova/pcb-defects' via '+ Add Input'"
+            )
+        
+        if self.val_generator.samples == 0:
+            raise ValueError(
+                f"❌ CRITICAL ERROR: No validation images found!\n"
+                f"   Data path: {self.data_path}\n"
+                f"   Training samples: {self.train_generator.samples}"
+            )
+        
         return self.train_generator, self.val_generator
     
     def get_steps(self):
