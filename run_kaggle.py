@@ -11,30 +11,51 @@ Usage on Kaggle:
 """
 
 import os
+import subprocess
 import sys
+from pathlib import Path
 
-# Setup path
-if os.path.basename(os.getcwd()) != 'pcb-defect-detector':
-    if os.path.exists('/kaggle/working/pcb-defect-detector'):
-        os.chdir('/kaggle/working/pcb-defect-detector')
 
-sys.path.insert(0, os.getcwd())
+def setup_environment() -> None:
+    """Configure l'environnement d'exécution."""
+    # Change de répertoire si nécessaire
+    target_dir = Path("/kaggle/working/pcb-defect-detector")
+    if Path.cwd().name != "pcb-defect-detector" and target_dir.exists():
+        os.chdir(target_dir)
+    
+    # Ajoute le répertoire courant au path
+    sys.path.insert(0, str(Path.cwd()))
 
-# Install ultralytics
-print("Installing ultralytics...")
-os.system("pip install ultralytics -q")
 
-# Run training
-from src.trainer import TrainingManager
+def install_dependencies() -> None:
+    """Installe les dépendances requises."""
+    print("Installation de ultralytics...")
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "ultralytics", "-q"],
+        check=True
+    )
 
-trainer = TrainingManager()
-metrics = trainer.run_pipeline(epochs=50)
 
-print("\n" + "=" * 60)
-print("FINAL RESULTS")
-print("=" * 60)
-print(f"mAP@50:     {metrics.get('mAP50', 0):.4f}")
-print(f"mAP@50-95:  {metrics.get('mAP50-95', 0):.4f}")
-print(f"Precision:  {metrics.get('precision', 0):.4f}")
-print(f"Recall:     {metrics.get('recall', 0):.4f}")
-print("=" * 60)
+def run_training(epochs: int = 50) -> dict:
+    """Exécute l'entraînement et retourne les métriques."""
+    from src.trainer import TrainingManager
+    from src.utils import format_metrics, print_section_header
+    
+    trainer = TrainingManager()
+    metrics = trainer.run_pipeline(epochs=epochs)
+    
+    print_section_header("RÉSULTATS FINAUX")
+    print(format_metrics(metrics))
+    
+    return metrics
+
+
+def main() -> None:
+    """Point d'entrée principal."""
+    setup_environment()
+    install_dependencies()
+    run_training(epochs=50)
+
+
+if __name__ == "__main__":
+    main()

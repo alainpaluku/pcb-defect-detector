@@ -1,18 +1,26 @@
 #!/bin/bash
 # Script pour pousser sur GitHub
-# Usage: bash git_push.sh
+# Usage: bash git_push.sh [message de commit]
 
-cd ~/pcb-defect-detector/pcb-defect-detector
+set -e
+
+# Se placer dans le répertoire du script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# Message de commit (argument ou valeur par défaut)
+COMMIT_MSG="${1:-Update: $(date '+%Y-%m-%d %H:%M')}"
 
 # Ajouter tous les fichiers modifiés
 git add -A
 
 # Commit avec message
-git commit -m "Fix: Add critical validation for empty datasets"
+git commit -m "$COMMIT_MSG" || echo "Rien à commiter"
 
 # Configurer le remote (si pas déjà fait)
-git remote remove origin 2>/dev/null
-git remote add origin https://github.com/alainpaluku/pcb-defect-detector.git
+if ! git remote get-url origin &>/dev/null; then
+    git remote add origin https://github.com/alainpaluku/pcb-defect-detector.git
+fi
 
 # Pousser sur main
 git branch -M main

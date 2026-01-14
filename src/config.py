@@ -1,17 +1,49 @@
 """Configuration for PCB Defect Detection System."""
 
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Dict, List, Optional
+
+
+# Constantes globales
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG")
+
+
+@dataclass
+class ModelConfig:
+    """Configuration du modèle YOLOv8."""
+    name: str = "yolov8n.pt"
+    img_size: int = 640
+    batch_size: int = 16
+    epochs: int = 50
+    patience: int = 10
+    learning_rate: float = 0.001
+    optimizer: str = "Adam"
+    augment: bool = True
+    mosaic: float = 0.5
+    mixup: float = 0.1
+
+
+@dataclass
+class InferenceConfig:
+    """Configuration pour l'inférence."""
+    conf_threshold: float = 0.25
+    iou_threshold: float = 0.45
+
+
+@dataclass
+class DataConfig:
+    """Configuration des données."""
+    kaggle_dataset: str = "akhatova/pcb-defects"
+    val_split: float = 0.2
+    random_seed: int = 42
 
 
 class Config:
-    """Central configuration for PCB defect detection with YOLOv8."""
+    """Configuration centrale pour la détection de défauts PCB."""
     
-    # Dataset
-    KAGGLE_DATASET = "akhatova/pcb-defects"
-    
-    # Classes (6 types of defects)
-    CLASS_NAMES = [
+    CLASS_NAMES: List[str] = [
         "missing_hole",
         "mouse_bite",
         "open_circuit",
@@ -20,61 +52,38 @@ class Config:
         "spurious_copper"
     ]
     
-    # Class name mapping (handles different naming conventions)
-    CLASS_MAP = {
-        "missing_hole": 0, "Missing_hole": 0, "MISSING_HOLE": 0,
-        "mouse_bite": 1, "Mouse_bite": 1, "MOUSE_BITE": 1,
-        "open_circuit": 2, "Open_circuit": 2, "OPEN_CIRCUIT": 2,
-        "short": 3, "Short": 3, "SHORT": 3,
-        "spur": 4, "Spur": 4, "SPUR": 4,
-        "spurious_copper": 5, "Spurious_copper": 5, "SPURIOUS_COPPER": 5,
-    }
+    # Mapping des noms de classes (gère différentes conventions de casse)
+    CLASS_MAP: Dict[str, int] = {}
+    for idx, name in enumerate(CLASS_NAMES):
+        CLASS_MAP[name] = idx                                    # missing_hole
+        CLASS_MAP[name.title().replace("_", "_")] = idx          # Missing_Hole (title case)
+        CLASS_MAP[name.replace("_", " ").title().replace(" ", "_")] = idx  # Missing_hole
+        CLASS_MAP[name.upper()] = idx                            # MISSING_HOLE
     
-    NUM_CLASSES = 6
+    NUM_CLASSES: int = len(CLASS_NAMES)
     
-    # Model settings
-    MODEL_NAME = "yolov8n.pt"  # nano version (fast), alternatives: yolov8s.pt, yolov8m.pt
-    IMG_SIZE = 640
-    BATCH_SIZE = 16
-    EPOCHS = 50
-    PATIENCE = 10
-    
-    # Training
-    LEARNING_RATE = 0.001
-    OPTIMIZER = "Adam"
-    AUGMENT = True
-    MOSAIC = 0.5
-    MIXUP = 0.1
-    
-    # Validation split
-    VAL_SPLIT = 0.2
-    RANDOM_SEED = 42
-    
-    # Confidence threshold for inference
-    CONF_THRESHOLD = 0.25
-    IOU_THRESHOLD = 0.45
+    # Configurations par défaut
+    model: ModelConfig = ModelConfig()
+    inference: InferenceConfig = InferenceConfig()
+    data: DataConfig = DataConfig()
     
     @staticmethod
-    def is_kaggle():
-        """Check if running in Kaggle environment."""
+    def is_kaggle() -> bool:
+        """Vérifie si on est dans l'environnement Kaggle."""
         return os.path.exists("/kaggle/input")
     
     @staticmethod
-    def get_data_path():
-        """Return dataset path."""
+    def get_data_path() -> Path:
+        """Retourne le chemin du dataset."""
         if Config.is_kaggle():
-            paths = [
-                "/kaggle/input/pcb-defects",
-                "/kaggle/input/pcbdefects",
-            ]
-            for p in paths:
+            for p in ("/kaggle/input/pcb-defects", "/kaggle/input/pcbdefects"):
                 if Path(p).exists():
                     return Path(p)
         return Path("data/pcb-defects")
     
     @staticmethod
-    def get_output_path():
-        """Return output directory path."""
+    def get_output_path() -> Path:
+        """Retourne le répertoire de sortie."""
         if Config.is_kaggle():
             return Path("/kaggle/working")
         output_dir = Path("output")
@@ -82,6 +91,26 @@ class Config:
         return output_dir
     
     @staticmethod
-    def get_yolo_dataset_path():
-        """Return YOLO formatted dataset path."""
+    def get_yolo_dataset_path() -> Path:
+        """Retourne le chemin du dataset au format YOLO."""
         return Config.get_output_path() / "yolo_dataset"
+    
+    @classmethod
+    def create(
+        cls,
+        epochs: Optional[int] = None,
+        batch_size: Optional[int] = None,
+        img_size: Optional[int] = None,
+        conf_threshold: Optional[float] = None,
+    ) -> "Config":
+        """Crée une configuration personnalisée."""
+        config = cls()
+        if epochs is not None:
+            config.model.epochs = epochs
+        if batch_size is not None:
+            config.model.batch_size = batch_size
+        if img_size is not None:
+            config.model.img_size = img_size
+        if conf_threshold is not None:
+            config.inference.conf_threshold = conf_threshold
+        return config

@@ -1,137 +1,153 @@
 """YOLOv8 Model for PCB Defect Detection."""
 
 from pathlib import Path
-from src.config import Config
+from typing import Any, Dict, List, Optional, Union
+
+from src.config import Config, ModelConfig, InferenceConfig
+from src.utils import get_logger
+
+logger = get_logger(__name__)
+
+
+class ModelLoadError(Exception):
+    """Erreur lors du chargement du modèle."""
+    pass
+
+
+class YOLOWrapper:
+    """Wrapper pour le modèle YOLO avec gestion des erreurs."""
+    
+    def __init__(self, model_path: Union[str, Path]):
+        self.model_path = str(model_path)
+        self.model = self._load_model()
+    
+    def _load_model(self):
+        """Charge le modèle YOLO."""
+        try:
+            from ultralytics import YOLO
+            model = YOLO(self.model_path)
+            logger.info(f"Modèle chargé: {self.model_path}")
+            return model
+        except ImportError as e:
+            raise ModelLoadError(
+                "ultralytics non installé. Exécutez: pip install ultralytics"
+            ) from e
+        except Exception as e:
+            raise ModelLoadError(f"Erreur de chargement du modèle: {e}") from e
+    
+    def __getattr__(self, name: str):
+        """Délègue les appels au modèle sous-jacent."""
+        return getattr(self.model, name)
 
 
 class PCBDetector:
-    """YOLOv8-based detector for PCB defects."""
+    """Détecteur YOLOv8 pour les défauts PCB."""
     
-    def __init__(self, model_path=None):
-        """Initialize detector.
+    def __init__(
+        self,
+        model_path: Optional[Union[str, Path]] = None,
+        config: Optional[Config] = None
+    ):
+        """Initialise le détecteur.
         
         Args:
-            model_path: Path to trained model or pretrained model name
+            model_path: Chemin vers le modèle entraîné ou nom du modèle pré-entraîné
+            config: Configuration personnalisée
         """
-        self.model_path = model_path or Config.MODEL_NAME
-        self.model = None
-        self._load_model()
+        self.config = config or Config()
+        self.model_path = model_path or self.config.model.name
+        self._model: Optional[YOLOWrapper] = None
     
-    def _load_model(self):
-        """Load YOLO model."""
-        try:
-            from ultralytics import YOLO
-            self.model = YOLO(self.model_path)
-            print(f"Model loaded: {self.model_path}")
-        except ImportError:
-            raise ImportError("ultralytics not installed. Run: pip install ultralytics")
+    @property
+    def model(self) -> YOLOWrapper:
+        """Lazy loading du modèle."""
+        if self._model is None:
+            self._model = YOLOWrapper(self.model_path)
+        return self._model
     
-    def train(self, data_yaml, epochs=None, batch_size=None, img_size=None, 
-              project=None, name="pcb_yolo"):
-        """Train the model.
+    def train(
+        self,
+        data_yaml: Union[str, Path],
+        epochs: Optional[int] = None,
+        batch_size: Optional[int] = None,
+        img_size: Optional[int] = None,
+        project: Optional[str] = None,
+        name: str = "pcb_yolo"
+    ) -> Any:
+        """Entraîne le modèle.
         
         Args:
-            data_yaml: Path to dataset YAML config
-            epochs: Number of training epochs
-            batch_size: Batch size
-            img_size: Image size
-            project: Output project directory
-            name: Experiment name
+            data_yaml: Chemin vers la config YAML du dataset
+            epochs: Nombre d'époques d'entraînement
+            batch_size: Taille du batch
+            img_size: Taille des images
+            project: Répertoire de sortie
+            name: Nom de l'expérience
         
         Returns:
-            Training results
+            Résultats de l'entraînement
         """
-        epochs = epochs or Config.EPOCHS
-        batch_size = batch_size or Config.BATCH_SIZE
-        img_size = img_size or Config.IMG_SIZE
+        model_cfg = self.config.model
+        epochs = epochs or model_cfg.epochs
+        batch_size = batch_size or model_cfg.batch_size
+        img_size = img_size or model_cfg.img_size
         project = project or str(Config.get_output_path())
         
-        print(f"\nTraining YOLOv8 for {epochs} epochs...")
-        print(f"Dataset: {data_yaml}")
-        print(f"Batch size: {batch_size}, Image size: {img_size}")
+        logger.info(f"Entraînement YOLOv8 pour {epochs} époques...")
+        logger.info(f"Dataset: {data_yaml}")
+        logger.info(f"Batch: {batch_size}, Image: {img_size}")
         
-        results = self.model.train(
+        return self.model.train(
             data=str(data_yaml),
             epochs=epochs,
             imgsz=img_size,
             batch=batch_size,
-            patience=Config.PATIENCE,
+            patience=model_cfg.patience,
             save=True,
             project=project,
             name=name,
             exist_ok=True,
             pretrained=True,
-            optimizer=Config.OPTIMIZER,
-            lr0=Config.LEARNING_RATE,
-            augment=Config.AUGMENT,
-            mosaic=Config.MOSAIC,
-            mixup=Config.MIXUP,
+            optimizer=model_cfg.optimizer,
+            lr0=model_cfg.learning_rate,
+            augment=model_cfg.augment,
+            mosaic=model_cfg.mosaic,
+            mixup=model_cfg.mixup,
             verbose=True,
         )
-        
-        return results
     
-    def validate(self, data_yaml=None):
-        """Validate the model.
-        
-        Args:
-            data_yaml: Path to dataset YAML config
-        
-        Returns:
-            Validation metrics
-        """
-        metrics = self.model.val(data=data_yaml)
-        return metrics
+    def validate(self, data_yaml: Optional[Union[str, Path]] = None) -> Any:
+        """Valide le modèle."""
+        return self.model.val(data=str(data_yaml) if data_yaml else None)
     
-    def predict(self, source, conf=None, iou=None, save=True, show=False):
-        """Run inference on images.
-        
-        Args:
-            source: Image path, directory, or URL
-            conf: Confidence threshold
-            iou: IoU threshold for NMS
-            save: Save results
-            show: Display results
-        
-        Returns:
-            Detection results
-        """
-        conf = conf or Config.CONF_THRESHOLD
-        iou = iou or Config.IOU_THRESHOLD
-        
-        results = self.model.predict(
-            source=source,
-            conf=conf,
-            iou=iou,
+    def predict(
+        self,
+        source: Union[str, Path],
+        conf: Optional[float] = None,
+        iou: Optional[float] = None,
+        save: bool = True,
+        show: bool = False
+    ) -> List[Any]:
+        """Exécute l'inférence sur des images."""
+        inf_cfg = self.config.inference
+        return self.model.predict(
+            source=str(source),
+            conf=conf or inf_cfg.conf_threshold,
+            iou=iou or inf_cfg.iou_threshold,
             save=save,
             show=show,
         )
-        
-        return results
     
-    def export(self, format="onnx"):
-        """Export model to different formats.
-        
-        Args:
-            format: Export format (onnx, torchscript, tflite, etc.)
-        
-        Returns:
-            Path to exported model
-        """
-        print(f"Exporting model to {format}...")
+    def export(self, format: str = "onnx") -> Path:
+        """Exporte le modèle vers différents formats."""
+        logger.info(f"Export du modèle vers {format}...")
         path = self.model.export(format=format)
-        print(f"Exported: {path}")
-        return path
+        logger.info(f"Exporté: {path}")
+        return Path(path)
     
-    def get_metrics(self, results):
-        """Extract metrics from validation results.
-        
-        Args:
-            results: Validation results from model.val()
-        
-        Returns:
-            Dictionary of metrics
-        """
+    @staticmethod
+    def extract_metrics(results: Any) -> Dict[str, float]:
+        """Extrait les métriques des résultats de validation."""
         return {
             "mAP50": float(results.box.map50),
             "mAP50-95": float(results.box.map),
@@ -139,14 +155,7 @@ class PCBDetector:
             "recall": float(results.box.mr),
         }
     
-    @staticmethod
-    def load_trained(model_path):
-        """Load a trained model.
-        
-        Args:
-            model_path: Path to trained .pt file
-        
-        Returns:
-            PCBDetector instance
-        """
-        return PCBDetector(model_path=model_path)
+    @classmethod
+    def load_trained(cls, model_path: Union[str, Path]) -> "PCBDetector":
+        """Charge un modèle entraîné."""
+        return cls(model_path=model_path)
