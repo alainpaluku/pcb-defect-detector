@@ -186,10 +186,16 @@ for cls in classes_found:
     count = len(list((data_path / cls).glob("*")))
     print(f"      - {cls}: {count} images")
 
-if len(classes_found) == 0:
-    print(f"\n❌ ERROR: No class folders found in {data_path}")
-    print(f"   Expected folders (any of): {Config.DEFECT_CLASSES}")
+if len(classes_found) < 3:
+    print(f"\n❌ ERROR: Insufficient class folders found in {data_path}")
+    print(f"   Found: {classes_found}")
+    print(f"   Expected at least 3 of: {Config.DEFECT_CLASSES}")
     print(f"   Or CamelCase: Missing_hole, Mouse_bite, Open_circuit, Short, Spur, Spurious_copper")
+    print(f"\n👉 Please add the dataset 'akhatova/pcb-defects' to your Kaggle notebook:")
+    print("   1. Click '+ Add Input' on the right panel")
+    print("   2. Search for 'akhatova/pcb-defects'")
+    print("   3. Click 'Add' to add it")
+    print("   4. Re-run this script")
     sys.exit(1)
 
 # ============================================================
