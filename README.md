@@ -254,9 +254,45 @@ pcb-defect-detector/
 |---------|-------|
 | `pcb_model.keras` | Modèle Keras (recommandé) |
 | `pcb_model.h5` | Format legacy |
+| `pcb_model.onnx` | Format ONNX (cross-platform) |
+| `pcb_model.tflite` | Format TFLite (mobile/edge) |
 | `training_history.png` | Courbes d'entraînement |
 | `confusion_matrix.png` | Matrice de confusion |
 | `roc_curves.png` | Courbes ROC par classe |
+
+## 🔄 Formats d'Export
+
+### ONNX (Open Neural Network Exchange)
+
+Le modèle est automatiquement exporté en ONNX pour une compatibilité cross-platform :
+
+```python
+import onnxruntime as ort
+import numpy as np
+from PIL import Image
+
+# Charger le modèle ONNX
+session = ort.InferenceSession('pcb_model.onnx')
+
+# Préparer l'image
+img = Image.open('pcb_image.jpg').resize((224, 224))
+img_array = np.array(img, dtype=np.float32) / 255.0
+img_array = np.expand_dims(img_array, axis=0)
+
+# Inférence
+input_name = session.get_inputs()[0].name
+output_name = session.get_outputs()[0].name
+prediction = session.run([output_name], {input_name: img_array})[0]
+
+CLASSES = ['missing_hole', 'mouse_bite', 'open_circuit', 'short', 'spur', 'spurious_copper']
+print(f"Défaut: {CLASSES[np.argmax(prediction)]}")
+```
+
+**Avantages ONNX :**
+- 🌐 Compatible avec PyTorch, TensorFlow, scikit-learn
+- ⚡ Optimisé pour l'inférence (ONNX Runtime)
+- 🖥️ Fonctionne sur Windows, Linux, macOS, mobile
+- 🔧 Intégrable dans des apps C++, C#, Java, JavaScript
 
 ## 🔧 Configuration
 

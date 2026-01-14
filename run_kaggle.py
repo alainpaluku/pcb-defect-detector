@@ -11,6 +11,7 @@ Usage sur Kaggle:
 
 import os
 import sys
+import subprocess
 
 # ============================================================
 # 1. SETUP ENVIRONMENT
@@ -26,6 +27,11 @@ if os.path.basename(os.getcwd()) != 'pcb-defect-detector':
 
 # Add to path
 sys.path.insert(0, os.getcwd())
+
+# Install ONNX dependencies
+print("\n📦 Installing ONNX dependencies...")
+subprocess.run([sys.executable, "-m", "pip", "install", "-q", "tf2onnx", "onnx", "onnxruntime"], 
+               capture_output=True)
 
 # ============================================================
 # 2. IMPORTS

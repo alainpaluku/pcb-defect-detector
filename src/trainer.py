@@ -11,6 +11,7 @@ from sklearn.preprocessing import label_binarize
 from src.config import Config
 from src.data_ingestion import DataIngestion
 from src.model import PCBClassifier
+from src.utils import print_section_header, print_subsection, format_bytes
 
 
 class TrainingManager:
@@ -33,9 +34,7 @@ class TrainingManager:
         """Print system information header."""
         device_info = Config.get_device_info()
         
-        print("\n" + "=" * 60)
-        print("🔬 PCB DEFECT DETECTION SYSTEM")
-        print("=" * 60)
+        print_section_header("🔬 PCB DEFECT DETECTION SYSTEM")
         print(f"📅 Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"🖥️  Environment: {device_info['environment']}")
         print(f"📦 TensorFlow: {device_info['tensorflow_version']}")
@@ -74,32 +73,25 @@ class TrainingManager:
         Args:
             phase: 'training' or 'fine_tuning'
         """
-        callbacks = []
-        
-        # Model checkpoint
         checkpoint_path = self.output_path / f"best_model_{phase}.keras"
-        callbacks.append(
+        
+        callbacks = [
+            # Model checkpoint
             tf.keras.callbacks.ModelCheckpoint(
                 str(checkpoint_path),
                 monitor='val_accuracy',
                 save_best_only=True,
                 mode='max',
                 verbose=1
-            )
-        )
-        
-        # Early stopping
-        callbacks.append(
+            ),
+            # Early stopping
             tf.keras.callbacks.EarlyStopping(
                 monitor='val_loss',
                 patience=Config.EARLY_STOPPING_PATIENCE,
                 restore_best_weights=True,
                 verbose=1
-            )
-        )
-        
-        # Learning rate reduction
-        callbacks.append(
+            ),
+            # Learning rate reduction
             tf.keras.callbacks.ReduceLROnPlateau(
                 monitor='val_loss',
                 factor=Config.REDUCE_LR_FACTOR,
@@ -107,9 +99,9 @@ class TrainingManager:
                 min_lr=Config.MIN_LEARNING_RATE,
                 verbose=1
             )
-        )
+        ]
         
-        # TensorBoard (for Kaggle)
+        # TensorBoard for Kaggle environment
         if Config.is_kaggle():
             log_dir = self.output_path / "logs" / phase
             callbacks.append(
@@ -130,14 +122,11 @@ class TrainingManager:
         """
         epochs = epochs or Config.EPOCHS
         
-        print("\n" + "=" * 60)
-        print("🚀 PHASE 1: TRANSFER LEARNING")
-        print("=" * 60)
+        print_section_header("🚀 PHASE 1: TRANSFER LEARNING")
         
         train_steps, val_steps = self.data.get_steps()
         print(f"📈 Steps per epoch - Train: {train_steps}, Val: {val_steps}")
-        print(f"🔄 Epochs: {epochs}")
-        print()
+        print(f"🔄 Epochs: {epochs}\n")
         
         self.history = self.model.model.fit(
             self.data.train_generator,
@@ -162,9 +151,7 @@ class TrainingManager:
         epochs = epochs or Config.FINE_TUNE_EPOCHS
         layers = layers or Config.FINE_TUNE_LAYERS
         
-        print("\n" + "=" * 60)
-        print(f"🔧 PHASE 2: FINE-TUNING (unfreezing last {layers} layers)")
-        print("=" * 60)
+        print_section_header(f"🔧 PHASE 2: FINE-TUNING (unfreezing last {layers} layers)")
         
         # Enable fine-tuning
         self.model.enable_fine_tuning(
@@ -195,9 +182,7 @@ class TrainingManager:
     
     def evaluate(self):
         """Evaluate model and return metrics."""
-        print("\n" + "=" * 60)
-        print("📊 EVALUATION")
-        print("=" * 60)
+        print_section_header("📊 EVALUATION")
         
         # Evaluate on validation set
         results = self.model.model.evaluate(
@@ -213,9 +198,7 @@ class TrainingManager:
         self.metrics['f1_score'] = 2 * (precision * recall) / (precision + recall + 1e-7)
         
         # Print results
-        print("\n" + "-" * 40)
-        print("📈 FINAL METRICS")
-        print("-" * 40)
+        print_subsection("📈 FINAL METRICS")
         for k, v in self.metrics.items():
             print(f"   {k:15s}: {v:.4f}")
         print("-" * 40)
@@ -362,9 +345,7 @@ class TrainingManager:
             digits=4
         )
         
-        print("\n" + "=" * 60)
-        print("📋 CLASSIFICATION REPORT")
-        print("=" * 60)
+        print_section_header("📋 CLASSIFICATION REPORT")
         print(report)
         
         # Save to file
@@ -393,7 +374,7 @@ class TrainingManager:
         self.model.model.save(h5_path)
         print(f"   ✅ H5 format: {h5_path}")
         
-        # SavedModel format (for TF Serving) - use export() for Keras 3
+        # SavedModel format (for TF Serving)
         savedmodel_path = self.output_path / 'saved_model'
         try:
             self.model.model.export(savedmodel_path)
@@ -401,9 +382,69 @@ class TrainingManager:
         except Exception as e:
             print(f"   ⚠️ SavedModel export skipped: {e}")
         
+        # ONNX and TFLite formats
+        self._export_onnx()
+        self._export_tflite()
+        
         # Model size
-        model_size = keras_path.stat().st_size / (1024 * 1024)
-        print(f"\n   📦 Model size: {model_size:.2f} MB")
+        model_size_bytes = keras_path.stat().st_size
+        print(f"\n   📦 Model size: {format_bytes(model_size_bytes)}")
+    
+    def _export_onnx(self):
+        """Export model to ONNX format."""
+        try:
+            import tf2onnx
+            import onnx
+            
+            onnx_path = self.output_path / 'pcb_model.onnx'
+            
+            # Convert to ONNX
+            input_signature = [tf.TensorSpec(
+                shape=(None, *Config.IMG_SIZE, 3), 
+                dtype=tf.float32, 
+                name='input_image'
+            )]
+            
+            model_proto, _ = tf2onnx.convert.from_keras(
+                self.model.model,
+                input_signature=input_signature,
+                opset=13,
+                output_path=str(onnx_path)
+            )
+            
+            # Verify ONNX model
+            onnx_model = onnx.load(str(onnx_path))
+            onnx.checker.check_model(onnx_model)
+            
+            onnx_size = format_bytes(onnx_path.stat().st_size)
+            print(f"   ✅ ONNX format: {onnx_path} ({onnx_size})")
+            
+        except ImportError:
+            print("   ⚠️ ONNX export skipped: tf2onnx not installed")
+            print("      Install with: pip install tf2onnx onnx")
+        except Exception as e:
+            print(f"   ⚠️ ONNX export failed: {e}")
+    
+    def _export_tflite(self):
+        """Export model to TFLite format."""
+        try:
+            tflite_path = self.output_path / 'pcb_model.tflite'
+            
+            # Convert to TFLite
+            converter = tf.lite.TFLiteConverter.from_keras_model(self.model.model)
+            converter.optimizations = [tf.lite.Optimize.DEFAULT]
+            converter.target_spec.supported_types = [tf.float16]
+            
+            tflite_model = converter.convert()
+            
+            with open(tflite_path, 'wb') as f:
+                f.write(tflite_model)
+            
+            tflite_size = format_bytes(tflite_path.stat().st_size)
+            print(f"   ✅ TFLite format: {tflite_path} ({tflite_size})")
+            
+        except Exception as e:
+            print(f"   ⚠️ TFLite export failed: {e}")
     
     def run_pipeline(self, fine_tune=True, visualize_augmentation=False):
         """Execute complete training pipeline.
@@ -445,9 +486,7 @@ class TrainingManager:
         self.save_model()
         
         # Final summary
-        print("\n" + "=" * 60)
-        print("🎉 TRAINING COMPLETE!")
-        print("=" * 60)
+        print_section_header("🎉 TRAINING COMPLETE!")
         print(f"   📊 Final Accuracy: {self.metrics['accuracy']:.2%}")
         print(f"   📊 Final F1 Score: {self.metrics['f1_score']:.2%}")
         print(f"   📊 Final AUC: {self.metrics.get('auc', 0):.4f}")

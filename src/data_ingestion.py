@@ -8,6 +8,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.utils.class_weight import compute_class_weight
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from src.config import Config
+from src.utils import count_images, get_all_images, print_section_header, print_subsection
 
 
 class DataIngestion:
@@ -29,17 +30,6 @@ class DataIngestion:
         self.num_classes = None
         self.class_weights = None
         self.dataset_stats = None
-    
-    def _get_all_images(self, directory):
-        """Get all image files from a directory."""
-        images = []
-        for fmt in self.SUPPORTED_FORMATS:
-            images.extend(list(Path(directory).glob(fmt)))
-        return images
-    
-    def _count_images(self, directory):
-        """Count images in a directory."""
-        return len(self._get_all_images(directory))
     
     def _find_data_root(self):
         """Find the correct data root containing class folders."""
@@ -77,7 +67,7 @@ class DataIngestion:
         max_count = 0
         
         for d in class_dirs:
-            count = self._count_images(d)
+            count = count_images(d, self.SUPPORTED_FORMATS)
             if count > 0:
                 stats[d.name] = count
                 total += count
@@ -109,17 +99,13 @@ class DataIngestion:
         """Print formatted dataset analysis."""
         stats = self.dataset_stats
         
-        print("\n" + "=" * 60)
-        print("📊 DATASET ANALYSIS")
-        print("=" * 60)
+        print_section_header("📊 DATASET ANALYSIS")
         print(f"📁 Path: {self.data_path}")
         print(f"🖼️  Total images: {stats['total']}")
         print(f"🏷️  Classes: {stats['classes']}")
         print(f"📈 Avg per class: {stats['avg_samples_per_class']:.1f}")
         print(f"⚖️  Imbalance ratio: {stats['imbalance_ratio']:.2f}")
-        print("-" * 60)
-        print("Class Distribution:")
-        print("-" * 60)
+        print_subsection("Class Distribution:")
         
         for name, count in sorted(stats['distribution'].items()):
             pct = count / stats['total'] * 100
@@ -133,14 +119,14 @@ class DataIngestion:
         """Compute class weights to handle imbalanced data."""
         class_dirs = sorted([
             d for d in self.data_path.iterdir() 
-            if d.is_dir() and self._count_images(d) > 0
+            if d.is_dir() and count_images(d, self.SUPPORTED_FORMATS) > 0
         ])
         self.class_names = [d.name for d in class_dirs]
         
         # Build label array
         labels = []
         for idx, d in enumerate(class_dirs):
-            count = self._count_images(d)
+            count = count_images(d, self.SUPPORTED_FORMATS)
             labels.extend([idx] * count)
         
         # Compute balanced weights
@@ -221,8 +207,9 @@ class DataIngestion:
     
     def get_steps(self):
         """Return steps per epoch for train and validation."""
-        train_steps = max(1, self.train_generator.samples // self.batch_size)
-        val_steps = max(1, self.val_generator.samples // self.batch_size)
+        from src.utils import calculate_steps_per_epoch
+        train_steps = calculate_steps_per_epoch(self.train_generator.samples, self.batch_size)
+        val_steps = calculate_steps_per_epoch(self.val_generator.samples, self.batch_size)
         return train_steps, val_steps
     
     def get_sample_batch(self):
@@ -238,6 +225,7 @@ class DataIngestion:
     def visualize_augmentation(self, num_samples=5):
         """Visualize augmentation effects on sample images."""
         import matplotlib.pyplot as plt
+        from src.utils import get_all_images
         
         # Get one image per class
         fig, axes = plt.subplots(self.num_classes, num_samples + 1, 
@@ -245,7 +233,7 @@ class DataIngestion:
         
         for class_idx, class_name in enumerate(self.class_names):
             class_dir = self.data_path / class_name
-            images = self._get_all_images(class_dir)
+            images = get_all_images(class_dir, self.SUPPORTED_FORMATS)
             
             if not images:
                 continue
