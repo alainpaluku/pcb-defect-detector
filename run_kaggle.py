@@ -78,40 +78,61 @@ def find_pcb_dataset():
     """Find PCB dataset with class folders."""
     defect_classes = Config.DEFECT_CLASSES
     
-    # Kaggle paths to search
-    search_paths = [
-        "/kaggle/input/pcb-defects/PCB_DATASET/images",
-        "/kaggle/input/pcb-defects/PCB_DATASET",
-        "/kaggle/input/pcb-defects/images",
-        "/kaggle/input/pcb-defects",
-        "/kaggle/input/pcbdefects/PCB_DATASET/images",
-        "/kaggle/input/pcbdefects/PCB_DATASET",
-        "/kaggle/input/pcbdefects",
-    ]
-    
-    # Also search all subdirectories in /kaggle/input
+    # First, explore the structure
     kaggle_input = Path("/kaggle/input")
+    if kaggle_input.exists():
+        print("\n   🔍 Exploring /kaggle/input structure:")
+        for dataset_dir in kaggle_input.iterdir():
+            if dataset_dir.is_dir():
+                print(f"      📂 {dataset_dir.name}/")
+                explore_dir(dataset_dir, depth=0, max_depth=4)
+    
+    # Now search for class folders
+    search_paths = []
+    
+    # Build search paths dynamically
     if kaggle_input.exists():
         for dataset_dir in kaggle_input.iterdir():
             if dataset_dir.is_dir():
-                # Add dataset root
-                search_paths.append(str(dataset_dir))
-                # Add common subdirs
-                for subdir in ["PCB_DATASET", "images", "PCB_DATASET/images", "data"]:
-                    search_paths.append(str(dataset_dir / subdir))
+                # Add all possible paths
+                search_paths.append(dataset_dir)
+                for root, dirs, files in os.walk(dataset_dir):
+                    for d in dirs:
+                        search_paths.append(Path(root) / d)
     
-    # Search each path
-    for path_str in search_paths:
-        path = Path(path_str)
+    # Search each path for class folders
+    print(f"\n   🔍 Searching {len(search_paths)} directories for class folders...")
+    
+    for path in search_paths:
         if path.exists():
-            # Check if this path has class folders
             classes_found = [c for c in defect_classes if (path / c).exists()]
-            if len(classes_found) >= 3:  # At least 3 classes
+            if len(classes_found) >= 3:
                 print(f"   ✅ Found dataset at: {path}")
                 print(f"      Classes: {classes_found}")
                 return path
     
     return None
+
+def explore_dir(path, depth=0, max_depth=3):
+    """Recursively explore directory structure."""
+    if depth >= max_depth:
+        return
+    
+    indent = "      " + "   " * depth
+    try:
+        items = list(path.iterdir())[:10]  # Limit to 10 items
+        for item in items:
+            if item.is_dir():
+                # Check if it's a class folder
+                is_class = item.name in Config.DEFECT_CLASSES
+                marker = "🏷️ " if is_class else "📁 "
+                print(f"{indent}└── {marker}{item.name}/")
+                explore_dir(item, depth + 1, max_depth)
+            else:
+                if depth < 2:  # Only show files at shallow depths
+                    print(f"{indent}└── 📄 {item.name}")
+    except PermissionError:
+        pass
 
 # Show what's in /kaggle/input
 if Config.is_kaggle():
