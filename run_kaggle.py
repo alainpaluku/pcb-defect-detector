@@ -178,16 +178,18 @@ if data_path is None:
 
 print(f"\n   📁 Using data path: {data_path}")
 
-# Verify classes
-classes_found = [c for c in Config.DEFECT_CLASSES if (data_path / c).exists()]
-print(f"   Classes found: {len(classes_found)}/{len(Config.DEFECT_CLASSES)}")
+# Verify classes - check both lowercase and CamelCase names
+all_possible_classes = list(set(Config.DEFECT_CLASSES + Config.DEFECT_CLASSES_ALT))
+classes_found = [c for c in all_possible_classes if (data_path / c).exists()]
+print(f"   Classes found: {len(classes_found)}/6")
 for cls in classes_found:
     count = len(list((data_path / cls).glob("*")))
     print(f"      - {cls}: {count} images")
 
 if len(classes_found) == 0:
     print(f"\n❌ ERROR: No class folders found in {data_path}")
-    print(f"   Expected folders: {Config.DEFECT_CLASSES}")
+    print(f"   Expected folders (any of): {Config.DEFECT_CLASSES}")
+    print(f"   Or CamelCase: Missing_hole, Mouse_bite, Open_circuit, Short, Spur, Spurious_copper")
     sys.exit(1)
 
 # ============================================================
