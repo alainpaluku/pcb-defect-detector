@@ -1,191 +1,207 @@
 #!/usr/bin/env python3
 """
-PCB Defect Detection - Kaggle One-Click Runner
-
-Usage sur Kaggle (une seule cellule):
-    !rm -rf /kaggle/working/pcb-defect-detector
-    !git clone https://github.com/alainpaluku/pcb-defect-detector.git
-    %cd /kaggle/working/pcb-defect-detector
-    !python run_kaggle.py
+PCB Defect Detection - Kaggle Runner (Simplified)
 """
 
 import os
 import sys
-import subprocess
 from pathlib import Path
 
-# ============================================================
-# 1. SETUP ENVIRONMENT
-# ============================================================
 print("=" * 60)
-print("PCB DEFECT DETECTION - AUTO RUNNER")
+print("PCB DEFECT DETECTION")
 print("=" * 60)
 
-# S assurer qu on est dans le bon repertoire
-if os.path.basename(os.getcwd()) != 'pcb-defect-detector':
-    if os.path.exists('/kaggle/working/pcb-defect-detector'):
-        os.chdir('/kaggle/working/pcb-defect-detector')
-    elif os.path.exists('pcb-defect-detector'):
-        os.chdir('pcb-defect-detector')
+# Setup
+os.chdir("/kaggle/working")
+if os.path.exists("pcb-defect-detector"):
+    sys.path.insert(0, "/kaggle/working/pcb-defect-detector")
 
-sys.path.insert(0, os.getcwd())
-print(f"Working directory: {os.getcwd()}")
-
-# Installer dependances ONNX
-print("\nInstalling dependencies...")
-subprocess.run([sys.executable, "-m", "pip", "install", "-q", "tf2onnx", "onnx", "onnxruntime"], 
-               capture_output=True)
-
-# ============================================================
-# 2. TROUVER LE DATASET
-# ============================================================
-print("\nSearching for dataset...")
-
+# Find dataset
 data_path = None
-search_paths = [
+for p in [
     "/kaggle/input/pcb-defects/PCB_DATASET/images",
     "/kaggle/input/pcb-defects/PCB_DATASET",
-    "/kaggle/input/pcb-defects/images",
     "/kaggle/input/pcb-defects",
-    "/kaggle/input/pcbdefects/PCB_DATASET",
-    "/kaggle/input/pcbdefects",
-]
-
-# Classes possibles (lowercase et CamelCase)
-class_names = [
-    "missing_hole", "mouse_bite", "open_circuit", "short", "spur", "spurious_copper",
-    "Missing_hole", "Mouse_bite", "Open_circuit", "Short", "Spur", "Spurious_copper"
-]
-
-for p in search_paths:
-    path = Path(p)
-    if path.exists():
-        classes_found = [c for c in class_names if (path / c).exists()]
-        if len(classes_found) >= 3:
-            data_path = path
-            print(f"   Found: {data_path}")
-            print(f"   Classes: {classes_found}")
+]:
+    if Path(p).exists():
+        # Check for class folders
+        classes = ["Missing_hole", "Mouse_bite", "Open_circuit", "Short", "Spur", "Spurious_copper",
+                   "missing_hole", "mouse_bite", "open_circuit", "short", "spur", "spurious_copper"]
+        found = [c for c in classes if (Path(p) / c).exists()]
+        if len(found) >= 3:
+            data_path = Path(p)
+            print(f"Dataset: {data_path}")
+            print(f"Classes: {found}")
             break
 
-# Si pas trouve, chercher recursivement
-if data_path is None and Path("/kaggle/input").exists():
-    print("   Searching recursively...")
-    for dataset_dir in Path("/kaggle/input").iterdir():
-        if dataset_dir.is_dir():
-            for root, dirs, files in os.walk(dataset_dir):
-                root_path = Path(root)
-                classes_found = [c for c in class_names if (root_path / c).exists()]
-                if len(classes_found) >= 3:
-                    data_path = root_path
-                    print(f"   Found: {data_path}")
-                    break
-            if data_path:
-                break
-
 if data_path is None:
-    print("\nERROR: Dataset not found!")
-    print("\nPlease add the dataset:")
-    print("   1. Click '+ Add Input' on the right panel")
-    print("   2. Search for 'akhatova/pcb-defects'")
-    print("   3. Click 'Add'")
-    print("   4. Re-run this script")
+    print("ERROR: Dataset not found!")
+    print("Add 'akhatova/pcb-defects' via '+ Add Input'")
     sys.exit(1)
 
-# Compter les images
-total_images = 0
-for c in class_names:
-    cls_path = data_path / c
-    if cls_path.exists():
-        count = len(list(cls_path.glob("*.jpg"))) + len(list(cls_path.glob("*.png"))) + len(list(cls_path.glob("*.JPG")))
-        if count > 0:
-            print(f"      {c}: {count} images")
-            total_images += count
+# Count images
+total = 0
+for c in found:
+    n = len(list((data_path / c).glob("*.jpg"))) + len(list((data_path / c).glob("*.JPG")))
+    print(f"  {c}: {n}")
+    total += n
+print(f"Total: {total} images")
 
-print(f"\n   Total: {total_images} images")
-
-if total_images == 0:
-    print("\nERROR: No images found!")
-    sys.exit(1)
-
-# ============================================================
-# 3. IMPORTS
-# ============================================================
-print("\nLoading libraries...")
-
+# Imports
 import numpy as np
 import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras import layers
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+print(f"\nTensorFlow: {tf.__version__}")
+print(f"GPU: {tf.config.list_physical_devices('GPU')}")
+
+# Parameters
+IMG_SIZE = (224, 224)
+BATCH_SIZE = 32
+EPOCHS = 30
+
+# Data generators - SIMPLE, no preprocessing in generator
+train_datagen = ImageDataGenerator(
+    preprocessing_function=tf.keras.applications.mobilenet_v2.preprocess_input,
+    rotation_range=20,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    zoom_range=0.1,
+    horizontal_flip=True,
+    validation_split=0.2
+)
+
+val_datagen = ImageDataGenerator(
+    preprocessing_function=tf.keras.applications.mobilenet_v2.preprocess_input,
+    validation_split=0.2
+)
+
+train_gen = train_datagen.flow_from_directory(
+    data_path,
+    target_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='categorical',
+    subset='training',
+    shuffle=True
+)
+
+val_gen = val_datagen.flow_from_directory(
+    data_path,
+    target_size=IMG_SIZE,
+    batch_size=BATCH_SIZE,
+    class_mode='categorical',
+    subset='validation',
+    shuffle=False
+)
+
+print(f"\nTrain: {train_gen.samples}, Val: {val_gen.samples}")
+print(f"Classes: {list(train_gen.class_indices.keys())}")
+num_classes = len(train_gen.class_indices)
+
+# Model - Simple MobileNetV2
+base_model = tf.keras.applications.MobileNetV2(
+    input_shape=(224, 224, 3),
+    include_top=False,
+    weights='imagenet'
+)
+base_model.trainable = False
+
+model = keras.Sequential([
+    base_model,
+    layers.GlobalAveragePooling2D(),
+    layers.Dropout(0.2),
+    layers.Dense(num_classes, activation='softmax')
+])
+
+model.compile(
+    optimizer=keras.optimizers.Adam(learning_rate=0.001),
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+model.summary()
+
+# Train
+print("\n" + "=" * 60)
+print("TRAINING")
+print("=" * 60)
+
+callbacks = [
+    keras.callbacks.EarlyStopping(patience=5, restore_best_weights=True),
+    keras.callbacks.ReduceLROnPlateau(factor=0.5, patience=3)
+]
+
+history = model.fit(
+    train_gen,
+    validation_data=val_gen,
+    epochs=EPOCHS,
+    callbacks=callbacks
+)
+
+# Fine-tune
+print("\n" + "=" * 60)
+print("FINE-TUNING")
+print("=" * 60)
+
+base_model.trainable = True
+for layer in base_model.layers[:-30]:
+    layer.trainable = False
+
+model.compile(
+    optimizer=keras.optimizers.Adam(learning_rate=0.0001),
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+
+history_fine = model.fit(
+    train_gen,
+    validation_data=val_gen,
+    epochs=15,
+    callbacks=callbacks
+)
+
+# Evaluate
+print("\n" + "=" * 60)
+print("EVALUATION")
+print("=" * 60)
+
+val_gen.reset()
+results = model.evaluate(val_gen)
+print(f"\nLoss: {results[0]:.4f}")
+print(f"Accuracy: {results[1]:.2%}")
+
+# Save
+model.save("/kaggle/working/pcb_model.keras")
+print("\nModel saved to /kaggle/working/pcb_model.keras")
+
+# Plot
 import matplotlib
 matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
-print(f"   TensorFlow: {tf.__version__}")
-gpus = tf.config.list_physical_devices('GPU')
-gpu_msg = str(len(gpus)) + " available" if gpus else "Not available"
-print(f"   GPU: {gpu_msg}")
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-# ============================================================
-# 4. TRAINING
-# ============================================================
+# Combine histories
+acc = history.history['accuracy'] + history_fine.history['accuracy']
+val_acc = history.history['val_accuracy'] + history_fine.history['val_accuracy']
+loss = history.history['loss'] + history_fine.history['loss']
+val_loss = history.history['val_loss'] + history_fine.history['val_loss']
+
+axes[0].plot(acc, label='Train')
+axes[0].plot(val_acc, label='Val')
+axes[0].set_title('Accuracy')
+axes[0].legend()
+
+axes[1].plot(loss, label='Train')
+axes[1].plot(val_loss, label='Val')
+axes[1].set_title('Loss')
+axes[1].legend()
+
+plt.savefig('/kaggle/working/training_history.png')
+print("Plot saved to /kaggle/working/training_history.png")
+
 print("\n" + "=" * 60)
-print("STARTING TRAINING")
+print(f"DONE! Final Accuracy: {results[1]:.2%}")
 print("=" * 60)
-
-from src.data_ingestion import DataIngestion
-from src.trainer import TrainingManager
-
-# Initialiser avec le chemin trouve
-trainer = TrainingManager()
-trainer.data = DataIngestion(data_path=data_path)
-
-# Pipeline
-trainer.data.analyze_dataset()
-trainer.data.compute_class_weights()
-trainer.data.create_generators()
-trainer.setup_model()
-trainer.train()
-trainer.fine_tune()
-
-# Evaluation
-metrics = trainer.evaluate()
-
-# Visualisations
-trainer.plot_training_history()
-trainer.plot_confusion_matrix()
-
-# ROC curves
-trainer.data.val_generator.reset()
-predictions = trainer.model.model.predict(trainer.data.val_generator, verbose=0)
-y_true = trainer.data.val_generator.classes
-trainer.plot_roc_curves(y_true, predictions)
-trainer.generate_classification_report(y_true, np.argmax(predictions, axis=1))
-
-# Sauvegarder
-trainer.save_model()
-
-# ============================================================
-# 5. RESUME
-# ============================================================
-print("\n" + "=" * 60)
-print("TRAINING COMPLETE!")
-print("=" * 60)
-
-# Afficher les metriques depuis l'historique si metrics vide
-if metrics.get('accuracy', 0) == 0 and trainer.history:
-    # Prendre les dernieres valeurs de l'historique
-    hist = trainer.history.history
-    acc = hist.get('val_accuracy', [0])[-1] if 'val_accuracy' in hist else 0
-    prec = hist.get('val_precision', [0])[-1] if 'val_precision' in hist else 0
-    rec = hist.get('val_recall', [0])[-1] if 'val_recall' in hist else 0
-    f1 = 2 * (prec * rec) / (prec + rec + 1e-7)
-else:
-    acc = metrics.get('accuracy', 0)
-    prec = metrics.get('precision', 0)
-    rec = metrics.get('recall', 0)
-    f1 = metrics.get('f1_score', 0)
-
-print(f"\nResults:")
-print(f"   Accuracy:  {acc:.2%}")
-print(f"   Precision: {prec:.4f}")
-print(f"   Recall:    {rec:.4f}")
-print(f"   F1 Score:  {f1:.4f}")
-print(f"\nOutput: /kaggle/working/")
-print("\nDone!")
