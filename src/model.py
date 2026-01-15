@@ -103,6 +103,8 @@ class PCBDetector:
         logger.info(f"Entraînement YOLOv8 pour {epochs} époques...")
         logger.info(f"Dataset: {data_yaml}")
         logger.info(f"Batch: {batch_size}, Image: {img_size}")
+        logger.info(f"Modèle: {self.model_path}, Optimizer: {model_cfg.optimizer}")
+        logger.info(f"LR: {model_cfg.learning_rate}, Patience: {model_cfg.patience}")
         
         return self.model.train(
             data=str(data_yaml),
@@ -117,9 +119,24 @@ class PCBDetector:
             pretrained=True,
             optimizer=model_cfg.optimizer,
             lr0=model_cfg.learning_rate,
+            lrf=0.01,  # Learning rate final (fraction of lr0)
             augment=model_cfg.augment,
             mosaic=model_cfg.mosaic,
             mixup=model_cfg.mixup,
+            # Nouveaux paramètres pour améliorer la précision
+            warmup_epochs=model_cfg.warmup_epochs,
+            weight_decay=model_cfg.weight_decay,
+            dropout=model_cfg.dropout,
+            close_mosaic=model_cfg.close_mosaic,
+            # Paramètres supplémentaires
+            hsv_h=0.015,  # Augmentation couleur
+            hsv_s=0.7,
+            hsv_v=0.4,
+            degrees=10.0,  # Rotation
+            translate=0.1,  # Translation
+            scale=0.5,  # Scale
+            fliplr=0.5,  # Flip horizontal
+            flipud=0.2,  # Flip vertical (utile pour PCB)
             verbose=True,
         )
     

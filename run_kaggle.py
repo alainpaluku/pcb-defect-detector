@@ -90,7 +90,8 @@ def main() -> None:
     # Debug: afficher la structure du dataset
     debug_dataset_structure()
     
-    run_training(epochs=50)
+    # Entraînement avec 150 époques pour meilleure précision
+    run_training(epochs=150)
 
 
 if __name__ == "__main__":
