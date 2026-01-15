@@ -105,10 +105,18 @@ class DataIngestion:
     
     def _find_annotations_dir(self) -> None:
         """Recherche le répertoire des annotations."""
+        # Recherche récursive des dossiers Annotations
         candidates = [
             self.data_path / "Annotations",
             self.data_path / "PCB_DATASET" / "Annotations",
         ]
+        
+        # Recherche récursive si non trouvé
+        if not any(c.exists() for c in candidates):
+            for annot_dir in self.data_path.rglob("Annotations"):
+                if annot_dir.is_dir() and list(annot_dir.glob("*.xml")):
+                    candidates.insert(0, annot_dir)
+                    break
         
         for candidate in candidates:
             if candidate.exists() and list(candidate.glob("*.xml")):
@@ -124,15 +132,18 @@ class DataIngestion:
             self.data_path / "images",
         ]
         
+        # Ajouter les sous-dossiers potentiels
+        if self.data_path.exists():
+            for subdir in self.data_path.iterdir():
+                if subdir.is_dir() and subdir not in search_dirs:
+                    search_dirs.append(subdir)
+        
         for search_dir in search_dirs:
             if not search_dir.exists():
                 continue
             
-            # Vérifie les dossiers de classes
-            has_class_folders = any(
-                (search_dir / cls).exists()
-                for cls in Config.CLASS_MAP.keys()
-            )
+            # Vérifie les dossiers de classes (insensible à la casse)
+            has_class_folders = self._has_class_folders(search_dir)
             
             if has_class_folders:
                 self.images_dir = search_dir
@@ -142,6 +153,41 @@ class DataIngestion:
             if any(search_dir.glob(f"*{ext}") for ext in IMAGE_EXTENSIONS):
                 self.images_dir = search_dir
                 return
+        
+        # Recherche récursive en dernier recours
+        if self.images_dir is None:
+            self._find_images_recursive()
+    
+    def _has_class_folders(self, search_dir: Path) -> bool:
+        """Vérifie si le dossier contient des sous-dossiers de classes."""
+        if not search_dir.exists():
+            return False
+        
+        class_names_lower = {name.lower() for name in Config.CLASS_NAMES}
+        
+        for subdir in search_dir.iterdir():
+            if subdir.is_dir():
+                # Vérification insensible à la casse
+                subdir_name = subdir.name.lower().replace("-", "_").replace(" ", "_")
+                if subdir_name in class_names_lower:
+                    return True
+        return False
+    
+    def _find_images_recursive(self) -> None:
+        """Recherche récursive des images dans le dataset."""
+        logger.info("Recherche récursive des images...")
+        
+        # Chercher des dossiers qui ressemblent à des classes de défauts
+        class_names_lower = {name.lower() for name in Config.CLASS_NAMES}
+        
+        for folder in self.data_path.rglob("*"):
+            if folder.is_dir():
+                folder_name = folder.name.lower().replace("-", "_").replace(" ", "_")
+                if folder_name in class_names_lower:
+                    # Trouvé un dossier de classe, le parent est le dossier images
+                    self.images_dir = folder.parent
+                    logger.info(f"Trouvé dossier de classes: {self.images_dir}")
+                    return
     
     def collect_images(self) -> List[ImageItem]:
         """Collecte toutes les images avec leurs annotations."""
@@ -184,13 +230,42 @@ class DataIngestion:
     
     def _collect_from_class_folders(self, seen_images: set) -> None:
         """Collecte les images depuis les dossiers de classes."""
-        for cls_name in Config.CLASS_MAP.keys():
-            cls_dir = self.images_dir / cls_name
-            if not cls_dir.exists():
+        if not self.images_dir or not self.images_dir.exists():
+            return
+        
+        # Créer un mapping insensible à la casse
+        class_name_map = {}
+        for cls_name in Config.CLASS_NAMES:
+            class_name_map[cls_name.lower()] = cls_name
+            class_name_map[cls_name.lower().replace("_", "-")] = cls_name
+            class_name_map[cls_name.lower().replace("_", " ")] = cls_name
+        
+        # Parcourir les sous-dossiers
+        for subdir in self.images_dir.iterdir():
+            if not subdir.is_dir():
                 continue
             
+            # Normaliser le nom du dossier
+            normalized_name = subdir.name.lower().replace("-", "_").replace(" ", "_")
+            
+            # Trouver le nom de classe correspondant
+            cls_name = None
+            if normalized_name in class_name_map:
+                cls_name = class_name_map[normalized_name]
+            else:
+                # Essayer de matcher partiellement
+                for key, value in class_name_map.items():
+                    if key in normalized_name or normalized_name in key:
+                        cls_name = value
+                        break
+            
+            if cls_name is None:
+                continue
+            
+            logger.info(f"Collecte depuis dossier: {subdir.name} -> classe: {cls_name}")
+            
             for ext in IMAGE_EXTENSIONS:
-                for img_path in cls_dir.glob(f"*{ext}"):
+                for img_path in subdir.glob(f"*{ext}"):
                     if img_path not in seen_images:
                         self.all_images.append(ImageItem(
                             image_path=img_path,

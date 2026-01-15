@@ -36,6 +36,38 @@ def install_dependencies() -> None:
     )
 
 
+def debug_dataset_structure() -> None:
+    """Affiche la structure du dataset pour le debug."""
+    print("\n" + "=" * 60)
+    print("DEBUG: Structure du dataset Kaggle")
+    print("=" * 60)
+    
+    kaggle_input = Path("/kaggle/input")
+    if not kaggle_input.exists():
+        print("Pas dans l'environnement Kaggle")
+        return
+    
+    # Lister les datasets disponibles
+    print(f"\nDatasets dans {kaggle_input}:")
+    for item in kaggle_input.iterdir():
+        print(f"  📁 {item.name}")
+        if item.is_dir():
+            # Afficher les sous-dossiers (2 niveaux)
+            for sub in item.iterdir():
+                prefix = "    📁" if sub.is_dir() else "    📄"
+                print(f"{prefix} {sub.name}")
+                if sub.is_dir():
+                    # Compter les fichiers
+                    files = list(sub.iterdir())
+                    if len(files) <= 10:
+                        for f in files:
+                            prefix2 = "      📁" if f.is_dir() else "      📄"
+                            print(f"{prefix2} {f.name}")
+                    else:
+                        print(f"      ... ({len(files)} éléments)")
+    print("=" * 60 + "\n")
+
+
 def run_training(epochs: int = 50) -> dict:
     """Exécute l'entraînement et retourne les métriques."""
     from src.trainer import TrainingManager
@@ -54,6 +86,10 @@ def main() -> None:
     """Point d'entrée principal."""
     setup_environment()
     install_dependencies()
+    
+    # Debug: afficher la structure du dataset
+    debug_dataset_structure()
+    
     run_training(epochs=50)
 
 
