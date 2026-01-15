@@ -117,10 +117,12 @@ pcb-defect-detector/
 
 | Metric | Value |
 |--------|-------|
-| mAP@50 | ~0.85 |
-| mAP@50-95 | ~0.60 |
-| Precision | ~0.80 |
-| Recall | ~0.75 |
+| mAP@50 | 0.2219 |
+| mAP@50-95 | 0.1667 |
+| Precision | 0.1653 |
+| Recall | 0.6999 |
+
+*Results from 50 epochs training on Kaggle with YOLOv8n. Better results can be achieved with more epochs (100-150) and larger models (YOLOv8s/m).*
 
 ## Dataset
 
