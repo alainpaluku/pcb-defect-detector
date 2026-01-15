@@ -13,21 +13,24 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG")
 @dataclass
 class ModelConfig:
     """Configuration du modèle YOLOv8."""
-    name: str = "yolov8s.pt"  # Small model - meilleur équilibre précision/vitesse
+    name: str = "yolov8n.pt"  # Nano model - plus rapide, bon pour commencer
     img_size: int = 640
-    batch_size: int = 8  # Réduit pour stabilité GPU
-    epochs: int = 150  # Plus d'époques pour convergence
-    patience: int = 30  # Plus de patience avant early stopping
-    learning_rate: float = 0.0001  # LR plus bas pour stabilité
+    batch_size: int = 16  # Augmenté pour meilleure utilisation GPU
+    epochs: int = 50  # Réduit - early stopping arrêtera si convergence
+    patience: int = 15  # Early stopping plus agressif
+    learning_rate: float = 0.001  # LR standard pour convergence rapide
     optimizer: str = "AdamW"  # Meilleur optimiseur avec weight decay
     augment: bool = True
-    mosaic: float = 1.0  # Augmentation mosaic maximale
-    mixup: float = 0.2  # Plus de mixup
-    # Nouveaux paramètres pour améliorer la précision
-    warmup_epochs: float = 5.0  # Warmup pour stabiliser le début
+    mosaic: float = 0.5  # Réduit pour accélérer
+    mixup: float = 0.1  # Réduit
+    # Paramètres optimisés pour vitesse
+    warmup_epochs: float = 3.0  # Warmup réduit
     weight_decay: float = 0.0005  # Régularisation
-    dropout: float = 0.1  # Dropout pour éviter overfitting
-    close_mosaic: int = 20  # Désactiver mosaic les 20 dernières époques
+    dropout: float = 0.0  # Désactivé pour vitesse
+    close_mosaic: int = 10  # Désactiver mosaic les 10 dernières époques
+    # Nouveaux paramètres de performance
+    workers: int = 4  # Workers pour DataLoader parallèle
+    cache: str = "ram"  # Cache images en RAM (ou "disk" si peu de RAM)
 
 
 @dataclass

@@ -118,7 +118,8 @@ class TrainingManager:
         epochs = epochs or self.config.model.epochs
         
         print(f"\n⏱️  Démarrage de l'entraînement pour {epochs} époques...")
-        print(f"   (Cela peut prendre 1-2 heures sur GPU)")
+        print(f"   (Temps estimé: 15-30 min sur GPU Kaggle)")
+        print(f"   💡 Early stopping activé - arrêt auto si convergence")
         print("\n" + "-" * 60)
         
         yaml_path = self.data.get_yaml_path()

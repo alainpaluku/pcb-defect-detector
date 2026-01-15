@@ -123,20 +123,24 @@ class PCBDetector:
             augment=model_cfg.augment,
             mosaic=model_cfg.mosaic,
             mixup=model_cfg.mixup,
-            # Nouveaux paramètres pour améliorer la précision
+            # Paramètres de performance
             warmup_epochs=model_cfg.warmup_epochs,
             weight_decay=model_cfg.weight_decay,
             dropout=model_cfg.dropout,
             close_mosaic=model_cfg.close_mosaic,
-            # Paramètres supplémentaires
-            hsv_h=0.015,  # Augmentation couleur
-            hsv_s=0.7,
-            hsv_v=0.4,
-            degrees=10.0,  # Rotation
-            translate=0.1,  # Translation
-            scale=0.5,  # Scale
-            fliplr=0.5,  # Flip horizontal
-            flipud=0.2,  # Flip vertical (utile pour PCB)
+            # Optimisations vitesse
+            workers=model_cfg.workers,  # DataLoader parallèle
+            cache=model_cfg.cache,  # Cache images en RAM
+            amp=True,  # Mixed precision training (2x plus rapide)
+            # Augmentations réduites pour vitesse
+            hsv_h=0.01,
+            hsv_s=0.5,
+            hsv_v=0.3,
+            degrees=5.0,  # Rotation réduite
+            translate=0.1,
+            scale=0.3,  # Scale réduit
+            fliplr=0.5,
+            flipud=0.0,  # Désactivé
             verbose=True,
         )
     
