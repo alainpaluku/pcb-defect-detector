@@ -124,6 +124,19 @@ pcb-defect-detector/
 
 *Results from 50 epochs training on Kaggle with YOLOv8n. Better results can be achieved with more epochs (100-150) and larger models (YOLOv8s/m).*
 
+## Model Architecture
+
+| Property | Value |
+|----------|-------|
+| Base Model | YOLOv8n |
+| Layers | 75 |
+| Parameters | 3,006,818 |
+| Input Shape | (1, 3, 640, 640) BCHW |
+| Output Shape | (1, 10, 8400) |
+| ONNX Size | 6.0 MB |
+
+Output format: `[batch, 4 + num_classes, detections]` where 10 = 4 bbox coords + 6 defect classes
+
 ## Dataset
 
 [PCB Defects - Akhatova](https://www.kaggle.com/datasets/akhatova/pcb-defects)
