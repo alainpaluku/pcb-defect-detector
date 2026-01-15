@@ -68,18 +68,31 @@ def debug_dataset_structure() -> None:
     print("=" * 60 + "\n")
 
 
-def run_training(epochs: int = 50) -> dict:
+def run_training(epochs: int = 150) -> dict:
     """Exécute l'entraînement et retourne les métriques."""
     from src.trainer import TrainingManager
-    from src.utils import format_metrics, print_section_header
+    from src.utils import print_section_header
+    
+    print("\n" + "=" * 60)
+    print("🚀 DÉMARRAGE DE L'ENTRAÎNEMENT PCB DEFECT DETECTION")
+    print("=" * 60)
+    print(f"   Époques: {epochs}")
+    print(f"   GPU: {'✅ Disponible' if is_gpu_available() else '❌ Non disponible'}")
+    print("=" * 60 + "\n")
     
     trainer = TrainingManager()
     metrics = trainer.run_pipeline(epochs=epochs)
     
-    print_section_header("RÉSULTATS FINAUX")
-    print(format_metrics(metrics))
-    
     return metrics
+
+
+def is_gpu_available() -> bool:
+    """Vérifie si un GPU est disponible."""
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except:
+        return False
 
 
 def main() -> None:
