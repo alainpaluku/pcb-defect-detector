@@ -95,13 +95,30 @@ class DataIngestion:
         """Recherche les images et annotations dans le dataset."""
         logger.info(f"Recherche dans: {self.data_path}")
         
+        # Debug: lister la structure
+        self._debug_structure()
+        
         self._find_annotations_dir()
         self._find_images_dir()
         
         logger.info(f"Répertoire images: {self.images_dir}")
         logger.info(f"Répertoire annotations: {self.annot_dir}")
         
-        return self.images_dir is not None
+        return self.images_dir is not None or self.annot_dir is not None
+    
+    def _debug_structure(self) -> None:
+        """Affiche la structure pour debug."""
+        if not self.data_path.exists():
+            logger.warning(f"Chemin non trouvé: {self.data_path}")
+            return
+        
+        logger.info("Structure du dataset:")
+        for item in self.data_path.rglob("*"):
+            if item.is_dir():
+                # Compter les fichiers dans ce dossier
+                files = [f for f in item.iterdir() if f.is_file()]
+                if files:
+                    logger.info(f"  📁 {item.relative_to(self.data_path)} ({len(files)} fichiers)")
     
     def _find_annotations_dir(self) -> None:
         """Recherche le répertoire des annotations."""
@@ -112,51 +129,48 @@ class DataIngestion:
         ]
         
         # Recherche récursive si non trouvé
-        if not any(c.exists() for c in candidates):
-            for annot_dir in self.data_path.rglob("Annotations"):
-                if annot_dir.is_dir() and list(annot_dir.glob("*.xml")):
-                    candidates.insert(0, annot_dir)
-                    break
+        for annot_dir in self.data_path.rglob("Annotations"):
+            if annot_dir.is_dir():
+                candidates.insert(0, annot_dir)
         
         for candidate in candidates:
-            if candidate.exists() and list(candidate.glob("*.xml")):
-                self.annot_dir = candidate
-                return
+            if candidate.exists() and candidate.is_dir():
+                xml_files = list(candidate.glob("*.xml"))
+                if xml_files:
+                    self.annot_dir = candidate
+                    logger.info(f"Trouvé {len(xml_files)} fichiers XML dans {candidate}")
+                    return
     
     def _find_images_dir(self) -> None:
         """Recherche le répertoire des images."""
+        # Chercher d'abord le dossier "images" explicitement
+        for images_dir in self.data_path.rglob("images"):
+            if images_dir.is_dir():
+                # Vérifier s'il contient des images ou des sous-dossiers avec images
+                has_images = any(images_dir.glob(f"*{ext}") for ext in IMAGE_EXTENSIONS)
+                has_subfolders = any(d.is_dir() for d in images_dir.iterdir())
+                
+                if has_images or has_subfolders:
+                    self.images_dir = images_dir
+                    logger.info(f"Trouvé dossier images: {images_dir}")
+                    return
+        
+        # Sinon chercher les dossiers de classes
         search_dirs = [
             self.data_path,
             self.data_path / "PCB_DATASET",
-            self.data_path / "PCB_DATASET" / "images",
-            self.data_path / "images",
         ]
-        
-        # Ajouter les sous-dossiers potentiels
-        if self.data_path.exists():
-            for subdir in self.data_path.iterdir():
-                if subdir.is_dir() and subdir not in search_dirs:
-                    search_dirs.append(subdir)
         
         for search_dir in search_dirs:
             if not search_dir.exists():
                 continue
             
-            # Vérifie les dossiers de classes (insensible à la casse)
-            has_class_folders = self._has_class_folders(search_dir)
-            
-            if has_class_folders:
-                self.images_dir = search_dir
-                return
-            
-            # Vérifie les images directes
-            if any(search_dir.glob(f"*{ext}") for ext in IMAGE_EXTENSIONS):
+            if self._has_class_folders(search_dir):
                 self.images_dir = search_dir
                 return
         
         # Recherche récursive en dernier recours
-        if self.images_dir is None:
-            self._find_images_recursive()
+        self._find_images_recursive()
     
     def _has_class_folders(self, search_dir: Path) -> bool:
         """Vérifie si le dossier contient des sous-dossiers de classes."""
@@ -194,31 +208,87 @@ class DataIngestion:
         self.all_images = []
         seen_images = set()
         
-        # Collecte via annotations XML
+        # Collecte via annotations XML (prioritaire)
         if self.annot_dir and self.annot_dir.exists():
             self._collect_from_xml(seen_images)
         
         # Collecte via dossiers de classes
         if self.images_dir:
             self._collect_from_class_folders(seen_images)
+            
+            # Si toujours pas d'images, chercher récursivement
+            if not self.all_images:
+                self._collect_all_images_recursive(seen_images)
         
         logger.info(f"Total images collectées: {len(self.all_images)}")
         return self.all_images
+    
+    def _collect_all_images_recursive(self, seen_images: set) -> None:
+        """Collecte toutes les images récursivement."""
+        if not self.images_dir:
+            return
+        
+        logger.info(f"Collecte récursive depuis: {self.images_dir}")
+        
+        for ext in IMAGE_EXTENSIONS:
+            for img_path in self.images_dir.rglob(f"*{ext}"):
+                if img_path in seen_images:
+                    continue
+                
+                # Essayer de déterminer la classe depuis le chemin
+                class_name = self._guess_class_from_path(img_path)
+                
+                self.all_images.append(ImageItem(
+                    image_path=img_path,
+                    class_name=class_name,
+                    source_type="recursive"
+                ))
+                seen_images.add(img_path)
+    
+    def _guess_class_from_path(self, img_path: Path) -> Optional[str]:
+        """Devine la classe depuis le chemin du fichier."""
+        path_str = str(img_path).lower()
+        
+        for cls_name in Config.CLASS_NAMES:
+            if cls_name.lower() in path_str:
+                return cls_name
+            # Variantes
+            if cls_name.lower().replace("_", "-") in path_str:
+                return cls_name
+            if cls_name.lower().replace("_", "") in path_str:
+                return cls_name
+        
+        return None
     
     def _collect_from_xml(self, seen_images: set) -> None:
         """Collecte les images depuis les annotations XML."""
         xml_files = list(self.annot_dir.glob("*.xml"))
         logger.info(f"Trouvé {len(xml_files)} annotations XML")
         
-        search_dirs = [d for d in [self.images_dir, self.data_path] if d]
-        class_subdirs = list(Config.CLASS_MAP.keys())
+        # Construire la liste des dossiers où chercher les images
+        search_dirs = []
+        if self.images_dir:
+            search_dirs.append(self.images_dir)
+            # Ajouter tous les sous-dossiers
+            for subdir in self.images_dir.rglob("*"):
+                if subdir.is_dir():
+                    search_dirs.append(subdir)
         
+        search_dirs.append(self.data_path)
+        
+        # Ajouter PCB_DATASET et ses sous-dossiers
+        pcb_dataset = self.data_path / "PCB_DATASET"
+        if pcb_dataset.exists():
+            search_dirs.append(pcb_dataset)
+            for subdir in pcb_dataset.rglob("*"):
+                if subdir.is_dir():
+                    search_dirs.append(subdir)
+        
+        logger.info(f"Recherche d'images dans {len(search_dirs)} dossiers")
+        
+        found_count = 0
         for xml_file in xml_files:
-            img_path = find_image_file(
-                xml_file.stem,
-                search_dirs,
-                subdirs=[""] + class_subdirs
-            )
+            img_path = find_image_file(xml_file.stem, search_dirs)
             
             if img_path:
                 self.all_images.append(ImageItem(
@@ -227,6 +297,9 @@ class DataIngestion:
                     source_type="xml"
                 ))
                 seen_images.add(img_path)
+                found_count += 1
+        
+        logger.info(f"Images trouvées pour {found_count}/{len(xml_files)} annotations")
     
     def _collect_from_class_folders(self, seen_images: set) -> None:
         """Collecte les images depuis les dossiers de classes."""

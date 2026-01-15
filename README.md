@@ -34,10 +34,12 @@ A YOLOv8-based Computer Vision solution for automated detection and classificati
 2. Enable **GPU** in notebook settings
 
 ```python
-!pip install ultralytics -q
-!rm -rf /kaggle/working/pcb-defect-detector
+import os
+os.chdir('/kaggle/working')
+!rm -rf pcb-defect-detector
 !git clone https://github.com/alainpaluku/pcb-defect-detector.git
-%cd /kaggle/working/pcb-defect-detector
+os.chdir('/kaggle/working/pcb-defect-detector')
+!pip install ultralytics -q
 !python run_kaggle.py
 ```
 

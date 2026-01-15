@@ -47,21 +47,29 @@ def find_image_file(
     subdirs: Optional[List[str]] = None
 ) -> Optional[Path]:
     """Recherche un fichier image par son nom de base."""
-    subdirs = subdirs or [""]
     
     for search_dir in search_dirs:
         if not search_dir or not search_dir.exists():
             continue
         
-        for subdir in subdirs:
-            check_dir = search_dir / subdir if subdir else search_dir
-            if not check_dir.exists():
-                continue
-                
-            for ext in IMAGE_EXTENSIONS:
-                candidate = check_dir / f"{base_name}{ext}"
-                if candidate.exists():
-                    return candidate
+        # Chercher directement dans le dossier
+        for ext in IMAGE_EXTENSIONS:
+            candidate = search_dir / f"{base_name}{ext}"
+            if candidate.exists():
+                return candidate
+        
+        # Chercher dans les sous-dossiers spécifiés
+        if subdirs:
+            for subdir in subdirs:
+                if not subdir:
+                    continue
+                check_dir = search_dir / subdir
+                if not check_dir.exists():
+                    continue
+                for ext in IMAGE_EXTENSIONS:
+                    candidate = check_dir / f"{base_name}{ext}"
+                    if candidate.exists():
+                        return candidate
     
     return None
 
