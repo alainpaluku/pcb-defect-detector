@@ -14,8 +14,7 @@ import { CheckCircleIcon as CheckCircleSolid } from '@heroicons/react/24/solid'
 
 import { InspectionItem, PredictionResult, BoundingBox } from '../types'
 import { DEFECT_LABELS, DEFECT_COLORS } from '../constants'
-import { predictImage } from '../utils/prediction'
-import { detectDefects } from '../utils/detection'
+import { predictImage, detectDefects } from '../utils'
 import { Card, CardHeader, CardContent, ProgressBar } from '../components/ui'
 import { ImageWithBoxes } from '../components/ImageWithBoxes'
 

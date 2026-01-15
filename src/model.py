@@ -25,9 +25,16 @@ class YOLOWrapper:
         """Charge le modèle YOLO."""
         try:
             from ultralytics import YOLO
-            model = YOLO(self.model_path)
-            logger.info(f"Modèle chargé: {self.model_path}")
-            return model
+            
+            # Vérifier si le fichier existe (sauf pour les modèles pré-entraînés)
+            model_file = Path(self.model_path)
+            if not model_file.suffix == '.pt' or (model_file.exists() or self.model_path in ['yolov8n.pt', 'yolov8s.pt', 'yolov8m.pt', 'yolov8l.pt', 'yolov8x.pt']):
+                model = YOLO(self.model_path)
+                logger.info(f"Modèle chargé: {self.model_path}")
+                return model
+            else:
+                raise ModelLoadError(f"Fichier modèle non trouvé: {self.model_path}")
+                
         except ImportError as e:
             raise ModelLoadError(
                 "ultralytics non installé. Exécutez: pip install ultralytics"

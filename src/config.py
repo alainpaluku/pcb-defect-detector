@@ -52,15 +52,36 @@ class Config:
         "spurious_copper"
     ]
     
+    NUM_CLASSES: int = len(CLASS_NAMES)
+    
     # Mapping des noms de classes (gère différentes conventions de casse)
     CLASS_MAP: Dict[str, int] = {}
-    for idx, name in enumerate(CLASS_NAMES):
-        CLASS_MAP[name] = idx                                    # missing_hole
-        CLASS_MAP[name.title().replace("_", "_")] = idx          # Missing_Hole (title case)
-        CLASS_MAP[name.replace("_", " ").title().replace(" ", "_")] = idx  # Missing_hole
-        CLASS_MAP[name.upper()] = idx                            # MISSING_HOLE
     
-    NUM_CLASSES: int = len(CLASS_NAMES)
+    @classmethod
+    def _init_class_map(cls) -> None:
+        """Initialise le mapping des classes avec différentes variantes de casse."""
+        for idx, name in enumerate(cls.CLASS_NAMES):
+            variants = {
+                name,                                      # missing_hole
+                name.upper(),                              # MISSING_HOLE
+                name.title(),                              # Missing_Hole
+                name.replace("_", " ").title().replace(" ", "_"),  # Missing_Hole
+            }
+            for variant in variants:
+                cls.CLASS_MAP[variant] = idx
+    
+    @classmethod
+    def get_class_id(cls, class_name: str) -> int:
+        """Retourne l'ID de classe, insensible à la casse."""
+        # Recherche directe
+        if class_name in cls.CLASS_MAP:
+            return cls.CLASS_MAP[class_name]
+        # Recherche insensible à la casse
+        lower_name = class_name.lower().replace(" ", "_")
+        for name, idx in cls.CLASS_MAP.items():
+            if name.lower() == lower_name:
+                return idx
+        raise ValueError(f"Classe inconnue: {class_name}")
     
     # Configurations par défaut
     model: ModelConfig = ModelConfig()
@@ -114,3 +135,7 @@ class Config:
         if conf_threshold is not None:
             config.inference.conf_threshold = conf_threshold
         return config
+
+
+# Initialiser le mapping des classes au chargement du module
+Config._init_class_map()

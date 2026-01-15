@@ -130,12 +130,23 @@ class TrainingManager:
         shutil.copy(best_model, dst)
         logger.info(f"Modèle sauvegardé: {dst}")
         
-        # Export ONNX
+        # Export ONNX - important pour l'application desktop
+        onnx_path = None
         try:
             if self.model:
-                self.model.export(format="onnx")
+                # Charger le meilleur modèle pour l'export
+                from src.model import PCBDetector
+                best_detector = PCBDetector(model_path=str(best_model))
+                onnx_path = best_detector.export(format="onnx")
+                
+                # Copier le modèle ONNX vers le répertoire de sortie
+                onnx_dst = self.output_path / "pcb_model.onnx"
+                if onnx_path and onnx_path.exists():
+                    shutil.copy(onnx_path, onnx_dst)
+                    logger.info(f"Modèle ONNX sauvegardé: {onnx_dst}")
         except Exception as e:
             logger.warning(f"Export ONNX échoué: {e}")
+            logger.info("L'application desktop fonctionnera en mode démo sans le modèle ONNX")
         
         return dst
     

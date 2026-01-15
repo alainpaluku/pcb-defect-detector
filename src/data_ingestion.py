@@ -235,11 +235,18 @@ class DataIngestion:
         count = 0
         
         for item in image_list:
+            # Vérifier que le fichier existe
+            if not item.image_path.exists():
+                logger.warning(f"Fichier non trouvé: {item.image_path}")
+                continue
+            
             try:
                 img = Image.open(item.image_path)
+                img.verify()  # Vérifier l'intégrité de l'image
+                img = Image.open(item.image_path)  # Réouvrir après verify()
                 img_width, img_height = img.size
             except Exception as e:
-                logger.warning(f"Erreur lecture {item.image_path}: {e}")
+                logger.warning(f"Image invalide {item.image_path}: {e}")
                 continue
             
             # Copie de l'image

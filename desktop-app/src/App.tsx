@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Page, InspectionItem } from './types'
 import { Sidebar } from './components/Sidebar'
 import { HomePage, HistoryPage, SettingsPage, AboutPage } from './pages'
-import { loadOnnxModel } from './utils/prediction'
+import { loadOnnxModel } from './utils'
 
 export default function App() {
   const [darkMode, setDarkMode] = useState(true)

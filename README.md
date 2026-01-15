@@ -1,35 +1,40 @@
 # PCB Defect Detection
 
-A CNN-based Computer Vision solution for automated quality control of Printed Circuit Boards (PCBs) using **MobileNetV2** transfer learning.
+A YOLOv8-based Computer Vision solution for automated detection and classification of defects on Printed Circuit Boards (PCBs).
 
 [![Kaggle](https://img.shields.io/badge/Kaggle-Dataset-20BEFF?style=flat-square&logo=kaggle)](https://www.kaggle.com/datasets/akhatova/pcb-defects)
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python)](https://python.org)
-[![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-FF6F00?style=flat-square&logo=tensorflow)](https://tensorflow.org)
+[![YOLOv8](https://img.shields.io/badge/YOLOv8-Ultralytics-00FFFF?style=flat-square)](https://ultralytics.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 
----
+## Features
 
-## Classes de Défauts
+- **Detection**: Locate defects with bounding boxes
+- **Classification**: Identify 6 types of PCB defects
+- **Real-time**: Fast inference with YOLOv8
+- **Export**: ONNX format for deployment
 
-| Défaut | Description |
-|--------|-------------|
-| `missing_hole` | Trou de perçage manquant |
-| `mouse_bite` | Bord rongé/irrégulier |
-| `open_circuit` | Circuit ouvert/interrompu |
-| `short` | Court-circuit |
-| `spur` | Excroissance de cuivre |
-| `spurious_copper` | Cuivre parasite |
+## Defect Classes
 
-## Démarrage Rapide
+| ID | Defect | Description |
+|----|--------|-------------|
+| 0 | `missing_hole` | Missing drill hole |
+| 1 | `mouse_bite` | Irregular edge |
+| 2 | `open_circuit` | Broken trace |
+| 3 | `short` | Short circuit |
+| 4 | `spur` | Copper protrusion |
+| 5 | `spurious_copper` | Unwanted copper |
 
-### Kaggle (Recommandé)
+## Quick Start
 
-**Prérequis :**
-1. Ajouter le dataset `akhatova/pcb-defects` via **"+ Add Input"**
-2. Activer le **GPU** dans les paramètres du notebook
+### Kaggle (Recommended)
 
-**Une seule cellule :**
+**Prerequisites:**
+1. Add dataset `akhatova/pcb-defects` via **"+ Add Input"**
+2. Enable **GPU** in notebook settings
+
 ```python
+!pip install ultralytics -q
 !rm -rf /kaggle/working/pcb-defect-detector
 !git clone https://github.com/alainpaluku/pcb-defect-detector.git
 %cd /kaggle/working/pcb-defect-detector
@@ -42,97 +47,90 @@ A CNN-based Computer Vision solution for automated quality control of Printed Ci
 git clone https://github.com/alainpaluku/pcb-defect-detector.git
 cd pcb-defect-detector
 pip install -r requirements.txt
-python main.py --epochs 30
+
+# Train
+python main.py train --epochs 50
+
+# Detect
+python main.py detect path/to/image.jpg --save
+
+# Export
+python main.py export --model output/pcb_model.pt --format onnx
 ```
 
-**Options CLI :**
-```bash
-python main.py --help
-python main.py --epochs 50 --batch-size 16 --lr 0.0001
-python main.py --no-fine-tune        # Sans fine-tuning
-python main.py --download            # Télécharger dataset Kaggle
-```
+## Usage
 
-## Architecture
-
-```
-Input (224×224×3)
-       ↓
-MobileNetV2 (ImageNet weights)
-       ↓
-GlobalAveragePooling2D + BatchNorm
-       ↓
-Dense(128) → Dropout(0.5) → ReLU
-Dense(64)  → Dropout(0.4) → ReLU
-       ↓
-Softmax (6 classes)
-```
-
-**Pipeline :**
-| Phase | Epochs | Learning Rate |
-|-------|--------|---------------|
-| Transfer Learning | 30 | 1e-4 |
-| Fine-tuning | 15 | 1e-5 |
-
-## Résultats
-
-| Métrique | Valeur |
-|----------|--------|
-| Accuracy | ~85% |
-| Precision | ~87% |
-| Recall | ~83% |
-| F1 Score | ~85% |
-
-## Utilisation du Modèle
+### Training
 
 ```python
-import tensorflow as tf
-import numpy as np
+from src.trainer import TrainingManager
 
-model = tf.keras.models.load_model('pcb_model.keras')
-CLASSES = ['missing_hole', 'mouse_bite', 'open_circuit', 'short', 'spur', 'spurious_copper']
-
-img = tf.keras.preprocessing.image.load_img('pcb_image.jpg', target_size=(224, 224))
-img_array = np.expand_dims(tf.keras.preprocessing.image.img_to_array(img) / 255.0, axis=0)
-
-prediction = model.predict(img_array)
-print(f"Défaut: {CLASSES[np.argmax(prediction)]} ({np.max(prediction)*100:.1f}%)")
+trainer = TrainingManager()
+metrics = trainer.run_pipeline(epochs=50)
+print(f"mAP@50: {metrics['mAP50']:.4f}")
 ```
 
-## Structure du Projet
+### Inference
+
+```python
+from src.detector import PCBInspector
+
+inspector = PCBInspector("pcb_model.pt")
+detections = inspector.inspect("pcb_image.jpg")
+
+for det in detections:
+    print(f"{det['class_name']}: {det['confidence']:.2%}")
+    print(f"  Box: {det['bbox']}")
+```
+
+### Batch Processing
+
+```python
+results = inspector.inspect_batch("images_folder/")
+for img_name, detections in results.items():
+    summary = inspector.get_summary(detections)
+    print(f"{img_name}: {summary['status']} - {summary['defect_count']} defects")
+```
+
+## Project Structure
 
 ```
 pcb-defect-detector/
 ├── src/
-│   ├── config.py           # Configuration
-│   ├── data_ingestion.py   # Chargement données
-│   ├── model.py            # Architecture MobileNetV2
-│   └── trainer.py          # Pipeline entraînement
-├── main.py                 # Point d'entrée local
-├── run_kaggle.py           # Script Kaggle
+│   ├── config.py         # Configuration
+│   ├── data_ingestion.py # Data loading & conversion
+│   ├── model.py          # YOLOv8 model wrapper
+│   ├── detector.py       # Inference interface
+│   ├── trainer.py        # Training pipeline
+│   ├── utils.py          # Utilities
+│   └── main.py           # CLI commands
+├── tests/
+│   └── test_model.py     # Unit tests
+├── main.py               # Entry point
+├── run_kaggle.py         # Kaggle runner
 └── requirements.txt
 ```
 
-## Fichiers Générés
+## Results
 
-| Fichier | Usage |
-|---------|-------|
-| `pcb_model.keras` | Modèle Keras |
-| `pcb_model.h5` | Format legacy |
-| `pcb_model.onnx` | Format ONNX |
-| `pcb_model.tflite` | Format TFLite (mobile) |
-| `training_history.png` | Courbes entraînement |
-| `confusion_matrix.png` | Matrice de confusion |
+| Metric | Value |
+|--------|-------|
+| mAP@50 | ~0.85 |
+| mAP@50-95 | ~0.60 |
+| Precision | ~0.80 |
+| Recall | ~0.75 |
 
 ## Dataset
 
 [PCB Defects - Akhatova](https://www.kaggle.com/datasets/akhatova/pcb-defects)
-- 1386 images, 6 classes
+- 1386 images with XML annotations
+- 6 defect classes
+- VOC format bounding boxes
 
-## Auteur
+## Author
 
 **Alain Paluku** - [@alainpaluku](https://github.com/alainpaluku)
 
-## Licence
+## License
 
 MIT License

@@ -1,7 +1,6 @@
 """Main entry point for PCB Defect Detection System."""
 
 import argparse
-import sys
 from pathlib import Path
 
 from src.config import Config
