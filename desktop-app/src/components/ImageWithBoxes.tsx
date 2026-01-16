@@ -1,6 +1,7 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useCallback } from 'react'
 import { BoundingBox } from '../types'
 import { DEFECT_COLORS, DEFECT_LABELS } from '../constants'
+import { MagnifyingGlassPlusIcon, MagnifyingGlassMinusIcon, ArrowsPointingOutIcon } from '@heroicons/react/24/outline'
 
 interface ImageWithBoxesProps {
   imageSrc: string
@@ -20,6 +21,10 @@ const BOX_COLORS: Record<string, string> = {
   spurious_copper: '#ec4899',  // pink-500
 }
 
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 5
+const ZOOM_STEP = 0.25
+
 /**
  * Composant qui affiche une image avec des bounding boxes
  * pour encercler les zones de défauts détectées
@@ -35,6 +40,46 @@ export function ImageWithBoxes({
   const containerRef = useRef<HTMLDivElement>(null)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageDimensions, setImageDimensions] = useState({ width: 0, height: 0 })
+  const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
+  const [isPanning, setIsPanning] = useState(false)
+  const [lastPanPoint, setLastPanPoint] = useState({ x: 0, y: 0 })
+  const imageRef = useRef<HTMLImageElement | null>(null)
+  const baseScaleRef = useRef(1)
+
+  // Redessiner quand zoom/pan change
+  const redraw = useCallback(() => {
+    const canvas = canvasRef.current
+    const container = containerRef.current
+    const img = imageRef.current
+    if (!canvas || !container || !img) return
+
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    // Effacer le canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    
+    // Sauvegarder le contexte
+    ctx.save()
+    
+    // Appliquer le zoom et le pan
+    ctx.translate(pan.x, pan.y)
+    ctx.scale(zoom, zoom)
+    
+    // Dessiner l'image
+    const displayWidth = img.width * baseScaleRef.current
+    const displayHeight = img.height * baseScaleRef.current
+    ctx.drawImage(img, 0, 0, displayWidth, displayHeight)
+    
+    // Dessiner les bounding boxes si activé
+    if (showBoxes && boundingBoxes.length > 0) {
+      drawBoundingBoxes(ctx, boundingBoxes, img.width, img.height, baseScaleRef.current)
+    }
+    
+    // Restaurer le contexte
+    ctx.restore()
+  }, [zoom, pan, showBoxes, boundingBoxes])
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -48,6 +93,8 @@ export function ImageWithBoxes({
     img.crossOrigin = 'anonymous'
 
     img.onload = () => {
+      imageRef.current = img
+      
       // Calculer les dimensions pour s'adapter au conteneur
       const containerWidth = container.clientWidth
       const containerHeight = container.clientHeight || 400
@@ -58,22 +105,19 @@ export function ImageWithBoxes({
         1 // Ne pas agrandir au-delà de la taille originale
       )
       
+      baseScaleRef.current = scale
       const displayWidth = img.width * scale
       const displayHeight = img.height * scale
       
       // Configurer le canvas
-      canvas.width = displayWidth
-      canvas.height = displayHeight
+      canvas.width = containerWidth
+      canvas.height = containerHeight
       
       setImageDimensions({ width: displayWidth, height: displayHeight })
       
-      // Dessiner l'image
-      ctx.drawImage(img, 0, 0, displayWidth, displayHeight)
-      
-      // Dessiner les bounding boxes si activé
-      if (showBoxes && boundingBoxes.length > 0) {
-        drawBoundingBoxes(ctx, boundingBoxes, img.width, img.height, scale)
-      }
+      // Reset zoom et pan pour nouvelle image
+      setZoom(1)
+      setPan({ x: (containerWidth - displayWidth) / 2, y: (containerHeight - displayHeight) / 2 })
       
       setImageLoaded(true)
     }
@@ -84,7 +128,56 @@ export function ImageWithBoxes({
     }
 
     img.src = imageSrc
-  }, [imageSrc, boundingBoxes, showBoxes])
+  }, [imageSrc])
+
+  // Redessiner quand les paramètres changent
+  useEffect(() => {
+    if (imageLoaded) {
+      redraw()
+    }
+  }, [imageLoaded, redraw, boundingBoxes, showBoxes])
+
+  // Gestion du zoom avec la molette
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault()
+    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP
+    setZoom(prev => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev + delta)))
+  }, [])
+
+  // Gestion du pan (drag)
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    if (zoom > 1) {
+      setIsPanning(true)
+      setLastPanPoint({ x: e.clientX, y: e.clientY })
+    }
+  }, [zoom])
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (isPanning) {
+      const dx = e.clientX - lastPanPoint.x
+      const dy = e.clientY - lastPanPoint.y
+      setPan(prev => ({ x: prev.x + dx, y: prev.y + dy }))
+      setLastPanPoint({ x: e.clientX, y: e.clientY })
+    }
+  }, [isPanning, lastPanPoint])
+
+  const handleMouseUp = useCallback(() => {
+    setIsPanning(false)
+  }, [])
+
+  // Boutons de zoom
+  const zoomIn = () => setZoom(prev => Math.min(MAX_ZOOM, prev + ZOOM_STEP))
+  const zoomOut = () => setZoom(prev => Math.max(MIN_ZOOM, prev - ZOOM_STEP))
+  const resetZoom = () => {
+    setZoom(1)
+    const container = containerRef.current
+    if (container) {
+      setPan({ 
+        x: (container.clientWidth - imageDimensions.width) / 2, 
+        y: (container.clientHeight - imageDimensions.height) / 2 
+      })
+    }
+  }
 
   return (
     <div 
@@ -93,12 +186,56 @@ export function ImageWithBoxes({
     >
       <canvas
         ref={canvasRef}
-        className="rounded-lg shadow-lg max-w-full"
+        className={`rounded-lg shadow-lg max-w-full ${zoom > 1 ? 'cursor-grab' : 'cursor-zoom-in'} ${isPanning ? 'cursor-grabbing' : ''}`}
         style={{ 
           maxHeight: '100%',
           objectFit: 'contain'
         }}
+        onWheel={handleWheel}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
       />
+      
+      {/* Contrôles de zoom */}
+      <div className={`absolute top-2 right-2 flex flex-col gap-1 p-1 rounded-lg ${
+        darkMode ? 'bg-gray-900/80' : 'bg-white/80'
+      }`}>
+        <button
+          onClick={zoomIn}
+          disabled={zoom >= MAX_ZOOM}
+          className={`p-1.5 rounded transition-colors disabled:opacity-30 ${
+            darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-200 text-gray-700'
+          }`}
+          title="Zoom avant"
+        >
+          <MagnifyingGlassPlusIcon className="w-5 h-5" />
+        </button>
+        <button
+          onClick={zoomOut}
+          disabled={zoom <= MIN_ZOOM}
+          className={`p-1.5 rounded transition-colors disabled:opacity-30 ${
+            darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-200 text-gray-700'
+          }`}
+          title="Zoom arrière"
+        >
+          <MagnifyingGlassMinusIcon className="w-5 h-5" />
+        </button>
+        <button
+          onClick={resetZoom}
+          disabled={zoom === 1}
+          className={`p-1.5 rounded transition-colors disabled:opacity-30 ${
+            darkMode ? 'hover:bg-gray-700 text-white' : 'hover:bg-gray-200 text-gray-700'
+          }`}
+          title="Réinitialiser"
+        >
+          <ArrowsPointingOutIcon className="w-5 h-5" />
+        </button>
+        <div className={`text-xs text-center py-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+          {Math.round(zoom * 100)}%
+        </div>
+      </div>
       
       {/* Légende des défauts détectés */}
       {showBoxes && boundingBoxes.length > 0 && (
@@ -119,6 +256,15 @@ export function ImageWithBoxes({
               </span>
             </div>
           ))}
+        </div>
+      )}
+      
+      {/* Indication zoom */}
+      {zoom > 1 && (
+        <div className={`absolute bottom-2 right-2 px-2 py-1 rounded text-xs ${
+          darkMode ? 'bg-gray-900/80 text-gray-400' : 'bg-white/80 text-gray-500'
+        }`}>
+          Glissez pour déplacer
         </div>
       )}
     </div>
