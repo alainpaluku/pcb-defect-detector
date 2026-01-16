@@ -29,12 +29,12 @@ A YOLOv8-based Computer Vision solution for automated detection and classificati
 
 ## Results
 
-| Metric | Value |
-|--------|-------|
-| mAP@50 | **95.5%** |
-| mAP@50-95 | 51.8% |
-| Precision | 95.4% |
-| Recall | 91.0% |
+| Metric | Value | Description |
+|--------|-------|-------------|
+| mAP@50 | **95.5%** | Précision moyenne à 50% IoU |
+| mAP@50-95 | 51.8% | Précision moyenne de 50% à 95% IoU |
+| Precision | 95.4% | Taux de vrais positifs |
+| Recall | 91.0% | Taux de détection |
 
 *Results from 100 epochs training on Kaggle with YOLOv8s.*
 
