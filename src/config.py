@@ -13,24 +13,22 @@ IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG")
 @dataclass
 class ModelConfig:
     """Configuration du modèle YOLOv8."""
-    name: str = "yolov8n.pt"  # Nano model - plus rapide, bon pour commencer
+    name: str = "yolov8s.pt"  # Small model - meilleur équilibre
     img_size: int = 640
-    batch_size: int = 16  # Augmenté pour meilleure utilisation GPU
-    epochs: int = 50  # Réduit - early stopping arrêtera si convergence
-    patience: int = 15  # Early stopping plus agressif
-    learning_rate: float = 0.001  # LR standard pour convergence rapide
-    optimizer: str = "AdamW"  # Meilleur optimiseur avec weight decay
+    batch_size: int = 16
+    epochs: int = 100  # Plus d'époques pour convergence
+    patience: int = 20  # Early stopping
+    learning_rate: float = 0.0005  # LR plus bas pour stabilité
+    optimizer: str = "AdamW"
     augment: bool = True
-    mosaic: float = 0.5  # Réduit pour accélérer
-    mixup: float = 0.1  # Réduit
-    # Paramètres optimisés pour vitesse
-    warmup_epochs: float = 3.0  # Warmup réduit
-    weight_decay: float = 0.0005  # Régularisation
-    dropout: float = 0.0  # Désactivé pour vitesse
-    close_mosaic: int = 10  # Désactiver mosaic les 10 dernières époques
-    # Nouveaux paramètres de performance
-    workers: int = 4  # Workers pour DataLoader parallèle
-    cache: str = "ram"  # Cache images en RAM (ou "disk" si peu de RAM)
+    mosaic: float = 1.0  # Mosaic complet pour mieux apprendre
+    mixup: float = 0.15
+    warmup_epochs: float = 5.0  # Plus de warmup
+    weight_decay: float = 0.0005
+    dropout: float = 0.1  # Régularisation
+    close_mosaic: int = 15
+    workers: int = 4
+    cache: str = "ram"
 
 
 @dataclass

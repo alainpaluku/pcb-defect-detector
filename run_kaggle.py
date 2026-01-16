@@ -68,7 +68,7 @@ def debug_dataset_structure() -> None:
     print("=" * 60 + "\n")
 
 
-def run_training(epochs: int = 50) -> dict:
+def run_training(epochs: int = 100) -> dict:
     """Exécute l'entraînement et retourne les métriques."""
     from src.trainer import TrainingManager
     from src.utils import print_section_header
@@ -103,8 +103,8 @@ def main() -> None:
     # Debug: afficher la structure du dataset
     debug_dataset_structure()
     
-    # Entraînement optimisé - 50 époques avec early stopping
-    run_training(epochs=50)
+    # Entraînement - 100 époques avec early stopping
+    run_training(epochs=100)
 
 
 if __name__ == "__main__":

@@ -82,8 +82,8 @@ class TrainingManager:
         
         print(f"\n📈 Statistiques du dataset:")
         print(f"   • Total images: {stats['total_images']}")
-        print(f"   • Avec annotations XML: {stats['with_xml']}")
-        print(f"   • Depuis dossiers: {stats['from_folders']}")
+        print(f"   • Avec annotations XML: {stats['with_xml']} ✅")
+        print(f"   • Sans annotations (ignorées): {stats['from_folders']} ⚠️")
         
         train_count, val_count = self.data.create_yolo_dataset()
         

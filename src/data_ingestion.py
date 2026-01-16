@@ -408,11 +408,18 @@ class DataIngestion:
                 yolo_lines = VOCConverter.convert(
                     item.annotation_path, img_width, img_height
                 )
-                label_path.write_text("\n".join(yolo_lines))
+                if yolo_lines:  # Seulement si des annotations valides
+                    label_path.write_text("\n".join(yolo_lines))
+                else:
+                    # Pas d'annotations valides, skip cette image
+                    dst_img.unlink(missing_ok=True)
+                    continue
             else:
-                # Dossier de classe - utilise l'image entière comme bbox
-                cls_id = Config.CLASS_MAP.get(item.class_name, 0)
-                label_path.write_text(f"{cls_id} 0.5 0.5 1.0 1.0")
+                # Images sans XML - on les ignore pour l'entraînement
+                # car une bbox pleine image n'est pas utile pour la détection
+                logger.debug(f"Image sans annotation XML ignorée: {item.image_path.name}")
+                dst_img.unlink(missing_ok=True)
+                continue
             
             count += 1
         
