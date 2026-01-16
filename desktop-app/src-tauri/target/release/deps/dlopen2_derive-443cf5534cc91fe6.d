@@ -1,0 +1,9 @@
+/home/alainpaluku/pcb-defect-detector/pcb-defect-detector/desktop-app/src-tauri/target/release/deps/dlopen2_derive-443cf5534cc91fe6.d: /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/lib.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/api.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/common.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/multi_api.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/wrapper.rs
+
+/home/alainpaluku/pcb-defect-detector/pcb-defect-detector/desktop-app/src-tauri/target/release/deps/libdlopen2_derive-443cf5534cc91fe6.so: /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/lib.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/api.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/common.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/multi_api.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/wrapper.rs
+
+/home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/lib.rs:
+/home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/api.rs:
+/home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/common.rs:
+/home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/multi_api.rs:
+/home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/dlopen2_derive-0.4.3/src/wrapper.rs:

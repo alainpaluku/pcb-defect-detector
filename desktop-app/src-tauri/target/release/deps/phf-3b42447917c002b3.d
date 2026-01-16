@@ -1,0 +1,11 @@
+/home/alainpaluku/pcb-defect-detector/pcb-defect-detector/desktop-app/src-tauri/target/release/deps/phf-3b42447917c002b3.d: /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/lib.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/map.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/ordered_map.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/ordered_set.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/set.rs
+
+/home/alainpaluku/pcb-defect-detector/pcb-defect-detector/desktop-app/src-tauri/target/release/deps/libphf-3b42447917c002b3.rlib: /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/lib.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/map.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/ordered_map.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/ordered_set.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/set.rs
+
+/home/alainpaluku/pcb-defect-detector/pcb-defect-detector/desktop-app/src-tauri/target/release/deps/libphf-3b42447917c002b3.rmeta: /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/lib.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/map.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/ordered_map.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/ordered_set.rs /home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/set.rs
+
+/home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/lib.rs:
+/home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/map.rs:
+/home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/ordered_map.rs:
+/home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/ordered_set.rs:
+/home/alainpaluku/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/phf-0.11.3/src/set.rs:

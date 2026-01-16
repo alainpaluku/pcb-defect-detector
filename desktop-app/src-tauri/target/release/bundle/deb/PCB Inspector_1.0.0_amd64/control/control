@@ -1,0 +1,9 @@
+Package: pcb-inspector
+Version: 1.0.0
+Architecture: amd64
+Installed-Size: 52381
+Maintainer: Alain Paluku
+Priority: optional
+Depends: libwebkit2gtk-4.1-0, libgtk-3-0
+Description: PCB Defect Detection Desktop App
+ (none)

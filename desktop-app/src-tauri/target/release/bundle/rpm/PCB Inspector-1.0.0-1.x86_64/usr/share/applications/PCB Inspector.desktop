@@ -1,0 +1,9 @@
+[Desktop Entry]
+Categories=
+Comment=PCB Defect Detection Desktop App
+Exec=pcb-inspector
+StartupWMClass=pcb-inspector
+Icon=pcb-inspector
+Name=PCB Inspector
+Terminal=false
+Type=Application
