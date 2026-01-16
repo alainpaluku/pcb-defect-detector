@@ -169,10 +169,10 @@ class TrainingManager:
             else:
                 return "🔴 À améliorer"
         
-        print(f"\n   mAP@50:     {map50:.4f}  ({map50*100:.1f}%)  {get_indicator(map50)}")
-        print(f"   mAP@50-95:  {map50_95:.4f}  ({map50_95*100:.1f}%)  {get_indicator(map50_95)}")
-        print(f"   Precision:  {precision:.4f}  ({precision*100:.1f}%)  {get_indicator(precision)}")
-        print(f"   Recall:     {recall:.4f}  ({recall*100:.1f}%)  {get_indicator(recall)}")
+        print(f"\n   Précision détection:  {map50:.4f}  ({map50*100:.1f}%)  {get_indicator(map50)}")
+        print(f"   Précision stricte:    {map50_95:.4f}  ({map50_95*100:.1f}%)  {get_indicator(map50_95)}")
+        print(f"   Fiabilité:            {precision:.4f}  ({precision*100:.1f}%)  {get_indicator(precision)}")
+        print(f"   Taux de détection:    {recall:.4f}  ({recall*100:.1f}%)  {get_indicator(recall)}")
         
         # Score global
         f1_score = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
@@ -236,35 +236,35 @@ class TrainingManager:
             # 1. Loss d'entraînement
             ax1 = axes[0, 0]
             if 'train/box_loss' in df.columns:
-                ax1.plot(df['epoch'], df['train/box_loss'], 'b-', label='Box Loss', linewidth=2)
-                ax1.plot(df['epoch'], df['train/cls_loss'], 'r-', label='Class Loss', linewidth=2)
-                ax1.plot(df['epoch'], df['train/dfl_loss'], 'g-', label='DFL Loss', linewidth=2)
+                ax1.plot(df['epoch'], df['train/box_loss'], 'b-', label='Erreur localisation', linewidth=2)
+                ax1.plot(df['epoch'], df['train/cls_loss'], 'r-', label='Erreur classification', linewidth=2)
+                ax1.plot(df['epoch'], df['train/dfl_loss'], 'g-', label='Erreur distribution', linewidth=2)
             ax1.set_xlabel('Époque')
-            ax1.set_ylabel('Loss')
-            ax1.set_title('📉 Loss d\'entraînement')
+            ax1.set_ylabel('Erreur')
+            ax1.set_title('📉 Erreurs d\'entraînement')
             ax1.legend()
             ax1.grid(True, alpha=0.3)
             
             # 2. Loss de validation
             ax2 = axes[0, 1]
             if 'val/box_loss' in df.columns:
-                ax2.plot(df['epoch'], df['val/box_loss'], 'b--', label='Box Loss', linewidth=2)
-                ax2.plot(df['epoch'], df['val/cls_loss'], 'r--', label='Class Loss', linewidth=2)
-                ax2.plot(df['epoch'], df['val/dfl_loss'], 'g--', label='DFL Loss', linewidth=2)
+                ax2.plot(df['epoch'], df['val/box_loss'], 'b--', label='Erreur localisation', linewidth=2)
+                ax2.plot(df['epoch'], df['val/cls_loss'], 'r--', label='Erreur classification', linewidth=2)
+                ax2.plot(df['epoch'], df['val/dfl_loss'], 'g--', label='Erreur distribution', linewidth=2)
             ax2.set_xlabel('Époque')
-            ax2.set_ylabel('Loss')
-            ax2.set_title('📉 Loss de validation')
+            ax2.set_ylabel('Erreur')
+            ax2.set_title('📉 Erreurs de validation')
             ax2.legend()
             ax2.grid(True, alpha=0.3)
             
             # 3. mAP
             ax3 = axes[0, 2]
             if 'metrics/mAP50(B)' in df.columns:
-                ax3.plot(df['epoch'], df['metrics/mAP50(B)'], 'b-', label='mAP@50', linewidth=2, marker='o', markersize=3)
-                ax3.plot(df['epoch'], df['metrics/mAP50-95(B)'], 'r-', label='mAP@50-95', linewidth=2, marker='s', markersize=3)
+                ax3.plot(df['epoch'], df['metrics/mAP50(B)'], 'b-', label='Précision détection', linewidth=2, marker='o', markersize=3)
+                ax3.plot(df['epoch'], df['metrics/mAP50-95(B)'], 'r-', label='Précision stricte', linewidth=2, marker='s', markersize=3)
             ax3.set_xlabel('Époque')
-            ax3.set_ylabel('mAP')
-            ax3.set_title('🎯 mAP (Mean Average Precision)')
+            ax3.set_ylabel('Score')
+            ax3.set_title('🎯 Précision de détection')
             ax3.legend()
             ax3.grid(True, alpha=0.3)
             ax3.set_ylim([0, 1])
@@ -272,11 +272,11 @@ class TrainingManager:
             # 4. Precision & Recall
             ax4 = axes[1, 0]
             if 'metrics/precision(B)' in df.columns:
-                ax4.plot(df['epoch'], df['metrics/precision(B)'], 'g-', label='Precision', linewidth=2)
-                ax4.plot(df['epoch'], df['metrics/recall(B)'], 'm-', label='Recall', linewidth=2)
+                ax4.plot(df['epoch'], df['metrics/precision(B)'], 'g-', label='Fiabilité', linewidth=2)
+                ax4.plot(df['epoch'], df['metrics/recall(B)'], 'm-', label='Taux de détection', linewidth=2)
             ax4.set_xlabel('Époque')
             ax4.set_ylabel('Score')
-            ax4.set_title('📊 Precision & Recall')
+            ax4.set_title('📊 Fiabilité & Taux de détection')
             ax4.legend()
             ax4.grid(True, alpha=0.3)
             ax4.set_ylim([0, 1])
@@ -284,12 +284,12 @@ class TrainingManager:
             # 5. Learning Rate
             ax5 = axes[1, 1]
             if 'lr/pg0' in df.columns:
-                ax5.plot(df['epoch'], df['lr/pg0'], 'c-', label='LR pg0', linewidth=2)
-                ax5.plot(df['epoch'], df['lr/pg1'], 'y-', label='LR pg1', linewidth=2)
-                ax5.plot(df['epoch'], df['lr/pg2'], 'k-', label='LR pg2', linewidth=2)
+                ax5.plot(df['epoch'], df['lr/pg0'], 'c-', label='Groupe 0', linewidth=2)
+                ax5.plot(df['epoch'], df['lr/pg1'], 'y-', label='Groupe 1', linewidth=2)
+                ax5.plot(df['epoch'], df['lr/pg2'], 'k-', label='Groupe 2', linewidth=2)
             ax5.set_xlabel('Époque')
-            ax5.set_ylabel('Learning Rate')
-            ax5.set_title('📈 Learning Rate Schedule')
+            ax5.set_ylabel('Taux d\'apprentissage')
+            ax5.set_title('📈 Évolution du taux d\'apprentissage')
             ax5.legend()
             ax5.grid(True, alpha=0.3)
             
@@ -302,10 +302,10 @@ class TrainingManager:
 ╔══════════════════════════════════════╗
 ║     📊 RÉSULTATS FINAUX              ║
 ╠══════════════════════════════════════╣
-║  mAP@50:      {self.metrics.get('mAP50', 0):.4f}  ({self.metrics.get('mAP50', 0)*100:.1f}%)     ║
-║  mAP@50-95:   {self.metrics.get('mAP50-95', 0):.4f}  ({self.metrics.get('mAP50-95', 0)*100:.1f}%)     ║
-║  Precision:   {self.metrics.get('precision', 0):.4f}  ({self.metrics.get('precision', 0)*100:.1f}%)     ║
-║  Recall:      {self.metrics.get('recall', 0):.4f}  ({self.metrics.get('recall', 0)*100:.1f}%)     ║
+║  Précision détection: {self.metrics.get('mAP50', 0):.4f} ({self.metrics.get('mAP50', 0)*100:.1f}%)  ║
+║  Précision stricte:   {self.metrics.get('mAP50-95', 0):.4f} ({self.metrics.get('mAP50-95', 0)*100:.1f}%)  ║
+║  Fiabilité:           {self.metrics.get('precision', 0):.4f} ({self.metrics.get('precision', 0)*100:.1f}%)  ║
+║  Taux de détection:   {self.metrics.get('recall', 0):.4f} ({self.metrics.get('recall', 0)*100:.1f}%)  ║
 ╚══════════════════════════════════════╝
 """
             ax6.text(0.1, 0.5, final_metrics, fontsize=12, fontfamily='monospace',
@@ -392,10 +392,10 @@ class TrainingManager:
 ╔══════════════════════════════════════════════════════════╗
 ║                    📊 RÉSUMÉ FINAL                       ║
 ╠══════════════════════════════════════════════════════════╣
-║  mAP@50:      {self.metrics.get('mAP50', 0):.4f}  ({self.metrics.get('mAP50', 0)*100:.1f}%)                        ║
-║  mAP@50-95:   {self.metrics.get('mAP50-95', 0):.4f}  ({self.metrics.get('mAP50-95', 0)*100:.1f}%)                        ║
-║  Precision:   {self.metrics.get('precision', 0):.4f}  ({self.metrics.get('precision', 0)*100:.1f}%)                        ║
-║  Recall:      {self.metrics.get('recall', 0):.4f}  ({self.metrics.get('recall', 0)*100:.1f}%)                        ║
+║  Précision détection: {self.metrics.get('mAP50', 0):.4f}  ({self.metrics.get('mAP50', 0)*100:.1f}%)                   ║
+║  Précision stricte:   {self.metrics.get('mAP50-95', 0):.4f}  ({self.metrics.get('mAP50-95', 0)*100:.1f}%)                   ║
+║  Fiabilité:           {self.metrics.get('precision', 0):.4f}  ({self.metrics.get('precision', 0)*100:.1f}%)                   ║
+║  Taux de détection:   {self.metrics.get('recall', 0):.4f}  ({self.metrics.get('recall', 0)*100:.1f}%)                   ║
 ╠══════════════════════════════════════════════════════════╣
 ║  📁 Fichiers générés:                                    ║
 ║     • pcb_model.pt (PyTorch)                             ║

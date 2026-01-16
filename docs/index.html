@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCB Defect Detector - Documentation</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .gradient-bg {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .glow {
+            box-shadow: 0 0 20px rgba(132, 204, 22, 0.3);
+        }
+    </style>
+</head>
+<body class="gradient-bg min-h-screen text-white">
+    <!-- Header -->
+    <header class="py-6 px-4 border-b border-gray-700">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-lime-500 rounded-lg flex items-center justify-center">
+                    <i class="fas fa-microchip text-white text-xl"></i>
+                </div>
+                <h1 class="text-2xl font-bold">PCB Defect Detector</h1>
+            </div>
+            <nav class="flex gap-6">
+                <a href="#features" class="hover:text-lime-400 transition">Fonctionnalités</a>
+                <a href="#demo" class="hover:text-lime-400 transition">Démo</a>
+                <a href="#results" class="hover:text-lime-400 transition">Résultats</a>
+                <a href="https://github.com/alainpaluku/pcb-defect-detector" class="hover:text-lime-400 transition">
+                    <i class="fab fa-github text-xl"></i>
+                </a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="py-20 px-4">
+        <div class="max-w-6xl mx-auto text-center">
+            <div class="inline-block px-4 py-2 bg-lime-500/20 rounded-full text-lime-400 text-sm mb-6">
+                🚀 Détection automatique de défauts PCB avec IA
+            </div>
+            <h2 class="text-5xl font-bold mb-6">
+                Inspectez vos circuits imprimés<br>
+                <span class="text-lime-400">avec précision</span>
+            </h2>
+            <p class="text-xl text-gray-400 mb-10 max-w-2xl mx-auto">
+                Solution de vision par ordinateur basée sur YOLOv8 pour détecter et classifier 
+                automatiquement 6 types de défauts sur les PCB.
+            </p>
+            <div class="flex gap-4 justify-center">
+                <a href="https://github.com/alainpaluku/pcb-defect-detector" 
+                   class="px-8 py-3 bg-lime-500 hover:bg-lime-600 rounded-lg font-semibold transition flex items-center gap-2">
+                    <i class="fab fa-github"></i> Voir sur GitHub
+                </a>
+                <a href="https://github.com/alainpaluku/pcb-defect-detector/releases" 
+                   class="px-8 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition flex items-center gap-2">
+                    <i class="fas fa-download"></i> Télécharger l'App
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats -->
+    <section class="py-12 px-4 bg-gray-900/50">
+        <div class="max-w-6xl mx-auto grid grid-cols-4 gap-8 text-center">
+            <div>
+                <div class="text-4xl font-bold text-lime-400">95.5%</div>
+                <div class="text-gray-400">Précision de détection</div>
+            </div>
+            <div>
+                <div class="text-4xl font-bold text-lime-400">6</div>
+                <div class="text-gray-400">Types de défauts</div>
+            </div>
+            <div>
+                <div class="text-4xl font-bold text-lime-400">1386</div>
+                <div class="text-gray-400">Images d'entraînement</div>
+            </div>
+            <div>
+                <div class="text-4xl font-bold text-lime-400">&lt;50ms</div>
+                <div class="text-gray-400">Temps d'inférence</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="py-20 px-4">
+        <div class="max-w-6xl mx-auto">
+            <h3 class="text-3xl font-bold text-center mb-12">Fonctionnalités</h3>
+            <div class="grid grid-cols-3 gap-8">
+                <div class="bg-gray-800/50 p-6 rounded-xl card-hover transition duration-300">
+                    <div class="w-12 h-12 bg-red-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-search text-red-400 text-xl"></i>
+                    </div>
+                    <h4 class="text-xl font-semibold mb-2">Détection précise</h4>
+                    <p class="text-gray-400">Localise les défauts avec des bounding boxes et un taux de précision de 95.5%.</p>
+                </div>
+                <div class="bg-gray-800/50 p-6 rounded-xl card-hover transition duration-300">
+                    <div class="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-tags text-blue-400 text-xl"></i>
+                    </div>
+                    <h4 class="text-xl font-semibold mb-2">Classification</h4>
+                    <p class="text-gray-400">Identifie 6 types de défauts : trou manquant, court-circuit, circuit ouvert, etc.</p>
+                </div>
+                <div class="bg-gray-800/50 p-6 rounded-xl card-hover transition duration-300">
+                    <div class="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-desktop text-purple-400 text-xl"></i>
+                    </div>
+                    <h4 class="text-xl font-semibold mb-2">Application Desktop</h4>
+                    <p class="text-gray-400">Interface moderne avec Tauri pour Windows, macOS et Linux.</p>
+                </div>
+                <div class="bg-gray-800/50 p-6 rounded-xl card-hover transition duration-300">
+                    <div class="w-12 h-12 bg-yellow-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-bolt text-yellow-400 text-xl"></i>
+                    </div>
+                    <h4 class="text-xl font-semibold mb-2">Temps réel</h4>
+                    <p class="text-gray-400">Inférence rapide grâce à YOLOv8 optimisé pour la production.</p>
+                </div>
+                <div class="bg-gray-800/50 p-6 rounded-xl card-hover transition duration-300">
+                    <div class="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-file-export text-green-400 text-xl"></i>
+                    </div>
+                    <h4 class="text-xl font-semibold mb-2">Export ONNX</h4>
+                    <p class="text-gray-400">Modèle exportable en ONNX pour déploiement sur différentes plateformes.</p>
+                </div>
+                <div class="bg-gray-800/50 p-6 rounded-xl card-hover transition duration-300">
+                    <div class="w-12 h-12 bg-pink-500/20 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-search-plus text-pink-400 text-xl"></i>
+                    </div>
+                    <h4 class="text-xl font-semibold mb-2">Zoom interactif</h4>
+                    <p class="text-gray-400">Zoomez sur les images pour inspecter les défauts en détail.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Defect Types -->
+    <section id="demo" class="py-20 px-4 bg-gray-900/50">
+        <div class="max-w-6xl mx-auto">
+            <h3 class="text-3xl font-bold text-center mb-12">Types de défauts détectés</h3>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-6">
+                <div class="bg-gray-800 p-4 rounded-lg border-l-4 border-red-500">
+                    <h4 class="font-semibold text-red-400">Trou manquant</h4>
+                    <p class="text-sm text-gray-400">Absence de perçage sur le circuit</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border-l-4 border-orange-500">
+                    <h4 class="font-semibold text-orange-400">Bord rongé</h4>
+                    <p class="text-sm text-gray-400">Irrégularité sur les bords du cuivre</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border-l-4 border-yellow-500">
+                    <h4 class="font-semibold text-yellow-400">Circuit ouvert</h4>
+                    <p class="text-sm text-gray-400">Piste de cuivre interrompue</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border-l-4 border-purple-500">
+                    <h4 class="font-semibold text-purple-400">Court-circuit</h4>
+                    <p class="text-sm text-gray-400">Connexion non désirée entre pistes</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border-l-4 border-blue-500">
+                    <h4 class="font-semibold text-blue-400">Excroissance</h4>
+                    <p class="text-sm text-gray-400">Protubérance de cuivre</p>
+                </div>
+                <div class="bg-gray-800 p-4 rounded-lg border-l-4 border-pink-500">
+                    <h4 class="font-semibold text-pink-400">Cuivre parasite</h4>
+                    <p class="text-sm text-gray-400">Résidu de cuivre indésirable</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Results -->
+    <section id="results" class="py-20 px-4">
+        <div class="max-w-6xl mx-auto">
+            <h3 class="text-3xl font-bold text-center mb-12">Résultats du modèle</h3>
+            
+            <!-- Image des résultats d'entraînement -->
+            <div class="mb-12">
+                <img src="training_results.png" alt="Graphiques d'entraînement" class="w-full rounded-xl shadow-2xl border border-gray-700">
+                <p class="text-center text-gray-400 mt-4">Graphiques d'entraînement sur 100 époques</p>
+            </div>
+            
+            <div class="bg-gray-800/50 rounded-xl p-8 max-w-2xl mx-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-gray-700">
+                            <th class="text-left py-3 text-gray-400">Métrique</th>
+                            <th class="text-right py-3 text-gray-400">Valeur</th>
+                            <th class="text-left py-3 pl-4 text-gray-400">Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-3 font-semibold">Précision de détection</td>
+                            <td class="text-right text-lime-400 font-bold text-xl">95.5%</td>
+                            <td class="pl-4 text-gray-400 text-sm">Localise correctement les défauts</td>
+                        </tr>
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-3 font-semibold">Précision stricte</td>
+                            <td class="text-right text-blue-400 font-bold text-xl">51.8%</td>
+                            <td class="pl-4 text-gray-400 text-sm">Avec critères plus stricts</td>
+                        </tr>
+                        <tr class="border-b border-gray-700/50">
+                            <td class="py-3 font-semibold">Fiabilité</td>
+                            <td class="text-right text-purple-400 font-bold text-xl">95.4%</td>
+                            <td class="pl-4 text-gray-400 text-sm">Détections sont de vrais défauts</td>
+                        </tr>
+                        <tr>
+                            <td class="py-3 font-semibold">Taux de détection</td>
+                            <td class="text-right text-pink-400 font-bold text-xl">91.0%</td>
+                            <td class="pl-4 text-gray-400 text-sm">Trouve la majorité des défauts</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <!-- Installation -->
+    <section class="py-20 px-4 bg-gray-900/50">
+        <div class="max-w-4xl mx-auto">
+            <h3 class="text-3xl font-bold text-center mb-12">Installation rapide</h3>
+            
+            <div class="space-y-6">
+                <div class="bg-gray-800 rounded-lg p-6">
+                    <h4 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <i class="fab fa-kaggle text-blue-400"></i> Entraînement sur Kaggle
+                    </h4>
+                    <pre class="bg-gray-900 p-4 rounded-lg overflow-x-auto text-sm"><code class="text-green-400">!pip install ultralytics -q
+!git clone https://github.com/alainpaluku/pcb-defect-detector.git
+%cd pcb-defect-detector
+!python run_kaggle.py</code></pre>
+                </div>
+
+                <div class="bg-gray-800 rounded-lg p-6">
+                    <h4 class="text-lg font-semibold mb-4 flex items-center gap-2">
+                        <i class="fas fa-desktop text-purple-400"></i> Application Desktop
+                    </h4>
+                    <pre class="bg-gray-900 p-4 rounded-lg overflow-x-auto text-sm"><code class="text-green-400">cd desktop-app
+npm install
+npm run tauri build</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="py-8 px-4 border-t border-gray-700">
+        <div class="max-w-6xl mx-auto flex justify-between items-center">
+            <div class="text-gray-400">
+                © 2024 PCB Defect Detector - Par <a href="https://github.com/alainpaluku" class="text-lime-400 hover:underline">Alain Paluku</a>
+            </div>
+            <div class="flex gap-4">
+                <a href="https://github.com/alainpaluku/pcb-defect-detector" class="text-gray-400 hover:text-white transition">
+                    <i class="fab fa-github text-xl"></i>
+                </a>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>
