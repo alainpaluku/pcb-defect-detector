@@ -27,16 +27,16 @@ A YOLOv8-based Computer Vision solution for automated detection and classificati
 | 4 | `spur` | Copper protrusion |
 | 5 | `spurious_copper` | Unwanted copper |
 
-## Results
+## Résultats
 
-| Metric | Value | Description |
-|--------|-------|-------------|
-| mAP@50 | **95.5%** | Précision moyenne à 50% IoU |
-| mAP@50-95 | 51.8% | Précision moyenne de 50% à 95% IoU |
-| Precision | 95.4% | Taux de vrais positifs |
-| Recall | 91.0% | Taux de détection |
+| Métrique | Valeur | Description |
+|----------|--------|-------------|
+| Précision de détection | **95.5%** | Le modèle localise correctement 95.5% des défauts |
+| Précision stricte | 51.8% | Précision avec des critères plus stricts |
+| Fiabilité | 95.4% | 95.4% des détections sont de vrais défauts |
+| Taux de détection | 91.0% | Le modèle trouve 91% de tous les défauts |
 
-*Results from 100 epochs training on Kaggle with YOLOv8s.*
+*Résultats après 100 époques d'entraînement sur Kaggle avec YOLOv8s.*
 
 ## Quick Start
 
