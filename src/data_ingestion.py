@@ -135,7 +135,12 @@ class DataIngestion:
         
         for candidate in candidates:
             if candidate.exists() and candidate.is_dir():
+                # Chercher les XML directement ou dans les sous-dossiers
                 xml_files = list(candidate.glob("*.xml"))
+                if not xml_files:
+                    # Chercher dans les sous-dossiers (structure par classe)
+                    xml_files = list(candidate.rglob("*.xml"))
+                
                 if xml_files:
                     self.annot_dir = candidate
                     logger.info(f"Trouvé {len(xml_files)} fichiers XML dans {candidate}")
@@ -262,7 +267,8 @@ class DataIngestion:
     
     def _collect_from_xml(self, seen_images: set) -> None:
         """Collecte les images depuis les annotations XML."""
-        xml_files = list(self.annot_dir.glob("*.xml"))
+        # Chercher les XML récursivement (structure par classe)
+        xml_files = list(self.annot_dir.rglob("*.xml"))
         logger.info(f"Trouvé {len(xml_files)} annotations XML")
         
         # Construire la liste des dossiers où chercher les images
